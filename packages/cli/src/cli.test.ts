@@ -8,7 +8,13 @@ import { Membook } from "@membook/core";
 import { init } from "./commands/init.js";
 import { status } from "./commands/status.js";
 import { review } from "./commands/review.js";
-import { book, reindex, remember, verify } from "./commands/misc.js";
+import {
+  book,
+  recheckerFromEnv,
+  reindex,
+  remember,
+  verify,
+} from "./commands/misc.js";
 
 let root: string;
 let lines: string[];
@@ -371,6 +377,112 @@ describe("the real binary", () => {
     const { stdout } = await execa("node", [bin, "--help"]);
     expect(stdout).toContain("membook");
     expect(stdout).toContain("review");
+  });
+});
+
+/**
+ * A local Ollama was asked for `gpt-4o-mini` twelve times across four runs
+ * before the telemetry made the cause obvious: the env var existed but
+ * nothing surfaced its name. The override has to reach the request AND the
+ * attribution string — attribution is how the mismatch was diagnosed at all.
+ */
+describe("model override", () => {
+  const withEnv = async <T>(
+    env: Record<string, string | undefined>,
+    fn: () => Promise<T> | T
+  ): Promise<T> => {
+    const saved = Object.fromEntries(
+      Object.keys(env).map((k) => [k, process.env[k]])
+    );
+    Object.assign(process.env, env);
+    for (const [k, v] of Object.entries(env)) {
+      if (v === undefined) delete process.env[k];
+    }
+    try {
+      return await fn();
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  };
+
+  it("--model reaches the attribution string", async () => {
+    await withEnv(
+      {
+        OPENAI_API_KEY: "test-key",
+        ANTHROPIC_API_KEY: undefined,
+        MEMBOOK_MODEL: undefined,
+      },
+      () => {
+        const checker = recheckerFromEnv(root, undefined, "qwen2.5-coder:3b");
+        expect(checker!.name).toBe("llm:openai-compatible:qwen2.5-coder:3b");
+      }
+    );
+  });
+
+  it("falls back to MEMBOOK_MODEL when no flag is given", async () => {
+    await withEnv(
+      {
+        OPENAI_API_KEY: "test-key",
+        ANTHROPIC_API_KEY: undefined,
+        MEMBOOK_MODEL: "from-env",
+      },
+      () => {
+        expect(recheckerFromEnv(root)!.name).toBe(
+          "llm:openai-compatible:from-env"
+        );
+      }
+    );
+  });
+
+  it("prefers the flag over the environment", async () => {
+    await withEnv(
+      {
+        OPENAI_API_KEY: "test-key",
+        ANTHROPIC_API_KEY: undefined,
+        MEMBOOK_MODEL: "from-env",
+      },
+      () => {
+        expect(recheckerFromEnv(root, undefined, "from-flag")!.name).toBe(
+          "llm:openai-compatible:from-flag"
+        );
+      }
+    );
+  });
+
+  it("keeps the provider default when neither is set", async () => {
+    await withEnv(
+      {
+        OPENAI_API_KEY: "test-key",
+        ANTHROPIC_API_KEY: undefined,
+        MEMBOOK_MODEL: undefined,
+      },
+      () => {
+        expect(recheckerFromEnv(root)!.name).toBe(
+          "llm:openai-compatible:gpt-4o-mini"
+        );
+      }
+    );
+  });
+
+  it("overrides the anthropic model too", async () => {
+    await withEnv(
+      { ANTHROPIC_API_KEY: "test-key", MEMBOOK_MODEL: undefined },
+      () => {
+        expect(
+          recheckerFromEnv(root, undefined, "claude-haiku-4-5")!.name
+        ).toBe("llm:anthropic:claude-haiku-4-5");
+      }
+    );
+  });
+
+  it("is offered by the CLI, so it can be found without reading source", async () => {
+    const bin = join(import.meta.dirname, "..", "dist", "cli.js");
+    if (!existsSync(bin)) return;
+    const { stdout } = await execa("node", [bin, "verify", "--help"]);
+    expect(stdout).toContain("--model");
   });
 });
 

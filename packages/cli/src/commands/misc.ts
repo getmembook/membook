@@ -106,26 +106,32 @@ export async function book(options: CommonOptions): Promise<void> {
   log("");
 }
 
-/** Build a re-checker from the environment, or explain why it cannot. */
+/**
+ * Build a re-checker from the environment, or explain why it cannot.
+ *
+ * The model is overridable by `--model` first, then `MEMBOOK_MODEL`, then the
+ * provider default. The env var alone was not enough: nothing surfaced its
+ * name, so a local Ollama was asked for `gpt-4o-mini` twelve times across four
+ * runs before the telemetry made it obvious. An override nobody can find is
+ * not an override.
+ */
 export function recheckerFromEnv(
   root: string,
-  instrumentation?: Instrumentation
+  instrumentation?: Instrumentation,
+  modelOverride?: string
 ): AnchorRechecker | null {
   let provider: ModelProvider | null = null;
+  const model = modelOverride ?? process.env["MEMBOOK_MODEL"];
 
   if (process.env["ANTHROPIC_API_KEY"]) {
     provider = new AnthropicProvider({
       apiKey: process.env["ANTHROPIC_API_KEY"],
-      ...(process.env["MEMBOOK_MODEL"]
-        ? { model: process.env["MEMBOOK_MODEL"] }
-        : {}),
+      ...(model ? { model } : {}),
     });
   } else if (process.env["OPENAI_API_KEY"]) {
     provider = new OpenAiCompatibleProvider({
       apiKey: process.env["OPENAI_API_KEY"],
-      ...(process.env["MEMBOOK_MODEL"]
-        ? { model: process.env["MEMBOOK_MODEL"] }
-        : {}),
+      ...(model ? { model } : {}),
       ...(process.env["OPENAI_BASE_URL"]
         ? { baseUrl: process.env["OPENAI_BASE_URL"] }
         : {}),
@@ -162,6 +168,8 @@ export function recheckerFromEnv(
 export interface VerifyOptions extends CommonOptions {
   dryRun?: boolean;
   recheck?: boolean;
+  /** Overrides the provider default and `MEMBOOK_MODEL`. */
+  model?: string;
 }
 
 export async function verify(options: VerifyOptions): Promise<void> {
@@ -178,7 +186,11 @@ export async function verify(options: VerifyOptions): Promise<void> {
 
   let rechecker: AnchorRechecker | null = null;
   if (options.recheck) {
-    rechecker = recheckerFromEnv(options.root, membook.instrumentation);
+    rechecker = recheckerFromEnv(
+      options.root,
+      membook.instrumentation,
+      options.model
+    );
     if (!rechecker) {
       die(
         "No model configured for re-checking.",
@@ -229,6 +241,31 @@ export async function verify(options: VerifyOptions): Promise<void> {
       log(wrap(v.reason, 74, "        "));
     }
     log("");
+
+    // Every re-check failing with the SAME message is a configuration
+    // problem, not a flaky call — and saying so is what stops a person
+    // retrying in hope. Four identical runs in five minutes happened here
+    // before the telemetry made the cause visible.
+    const failures = rechecked.filter((v) =>
+      v.reason.includes("could not run")
+    );
+    if (failures.length === rechecked.length && failures.length > 1) {
+      const first = failures[0]!.reason;
+      const identical = failures.every((v) => v.reason === first);
+      if (identical) {
+        log(
+          warn(
+            `All ${failures.length} re-checks failed with the same error. That is a configuration problem, not a transient one — retrying will not change it.`
+          )
+        );
+        log(
+          dim(
+            "  Check the model name (--model), the API key, and OPENAI_BASE_URL if you are pointing at a local server."
+          )
+        );
+        log("");
+      }
+    }
   }
 
   if (report.changed.length === 0) {

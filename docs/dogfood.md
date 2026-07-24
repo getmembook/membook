@@ -98,11 +98,65 @@ path, and it behaved exactly as specified: an unreachable model is not evidence
 of anything, so nothing was restored and nothing was assumed. The dangerous
 outcome here was a false restore on an API error, and it did not happen.
 
+### 2026-07-24 — the floor read: right verdicts, wrong reasoning
+
+**What happened.** Twelve failed re-checks against a local Ollama, all
+attributed to `gpt-4o-mini`, because the model override existed only as
+`MEMBOOK_MODEL` and nothing surfaced its name. Added `--model`, then ran
+`verify --recheck --model qwen2.5-coder:3b` against the three known-true
+memories.
+
+**What the tool did.** 3/3 `restore`. Matching ground truth — but read the
+reasons the prompt demanded:
+
+- `m-83be` (about **quoted UTC timestamps**): _"`gitAnchorSchema` was
+  modified, and now requires `commitSha`."_ A different memory's subject
+  entirely. Non-sequitur.
+- `m-88a8` (about the **wire schema being the standard**): _"`anchorSchema`
+  extends `gitAnchorSchema`, so any modification to `gitAnchorSchema` in the
+  same file **could cause issues**."_ That is an argument for caution,
+  returned alongside a restore.
+- `m-be36` (about **explicit anchor `kind`**): _"The added 'kind' field ... is
+  not present in v0.1"_ — factually wrong; its presence in v0.1 is the whole
+  memory.
+
+**The finding.** Schema validity is not a proxy for reasoning quality. The
+structured-output layer worked perfectly — valid JSON, valid enum, non-empty
+reason, zero repairs — and produced three citations that do not support the
+verdicts they accompany, one of which argues the other way. This is the most
+dangerous shape of pass: correct by coincidence. A 3B model can satisfy
+"cite the specific code that decided it" without the citation deciding
+anything, and cannot execute "absence of contradiction is not evidence."
+
+**What it means for the gate.** The skeptic bias lives in the prompt, and a
+prompt cannot make a small model skeptical. Re-checker accuracy has to be
+measured on reasons, not verdicts — a verdict-only score would have read
+100% here. The three memories are left `verified` because ground truth agrees,
+but the mechanism that restored them is not one to trust; `membook review`
+exists precisely for a human to ratify these properly.
+
+**Also.** Four identical failed runs in five minutes were a human retrying in
+hope. The CLI now detects that every re-check failed with the same error and
+says it is configuration rather than transience.
+
+**The book's full breath**, verbatim, after restoration:
+
+> It carries all 7 eligible memories. This file is generated, never edited by
+> hand — corrections belong in `.membook/memories/`.
+
+From "carries the one eligible memory, 3 further withheld" to full coverage,
+with the withheld sentence correctly absent.
+
 ### Pending
 
-- [ ] **Calibration read.** Re-run `verify --recheck` on a funded account. The
-      three memories are known-true, so three `restore` verdicts means the
-      skeptic recognises affirmative evidence; any `still-stale` is
-      prompt-calibration data, not failure — the bias was specified, so a
-      conservative miss is the system erring as instructed. Then regenerate
-      the book and capture the header verbatim.
+- [ ] **Calibration read on a frontier model.** The floor is measured; the
+      ceiling is not. Re-run against a larger model and compare _reasons_, not
+      verdict counts. The open question is whether re-check quality is a model
+      capability or a prompt problem — this run says a 3B cannot do it, and
+      says nothing yet about what can.
+- [x] ~~Re-run `verify --recheck` and capture the verdicts.~~ Done above, on a
+      local model. It also retired the framing this entry was written under:
+      "three `restore` verdicts means the skeptic recognises affirmative
+      evidence" turned out to be false. Three restores arrived on reasoning
+      that recognised nothing, which is why the pending item above measures
+      reasons rather than counting verdicts.

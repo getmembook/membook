@@ -46,13 +46,20 @@ program
     "--recheck",
     "ask a model about drifted memories (needs ANTHROPIC_API_KEY or OPENAI_API_KEY)"
   )
-  .action(async (opts: { dryRun?: boolean; recheck?: boolean }) => {
-    await verify({
-      root: root(),
-      ...(opts.dryRun ? { dryRun: true } : {}),
-      ...(opts.recheck ? { recheck: true } : {}),
-    });
-  });
+  .option(
+    "-m, --model <name>",
+    "model to re-check with; overrides MEMBOOK_MODEL and the provider default"
+  )
+  .action(
+    async (opts: { dryRun?: boolean; recheck?: boolean; model?: string }) => {
+      await verify({
+        root: root(),
+        ...(opts.dryRun ? { dryRun: true } : {}),
+        ...(opts.recheck ? { recheck: true } : {}),
+        ...(opts.model !== undefined ? { model: opts.model } : {}),
+      });
+    }
+  );
 
 program
   .command("review")

@@ -10,9 +10,8 @@ Every memory is anchored to specific files. Anything whose anchored code has
 changed since it was last checked is withheld from this file rather than
 asserted.
 
-It carries all 4 eligible memories. 3 further memories are withheld because
-the code they describe has changed since they were last checked. This file is
-generated, never edited by hand — corrections belong in `.membook/memories/`.
+It carries all 7 eligible memories. This file is generated, never edited by
+hand — corrections belong in `.membook/memories/`.
 
 Entries marked `(unverified)` have not been checked against current code yet.
 Treat them as informed leads rather than established fact.
@@ -35,8 +34,49 @@ Every workspace package resolves its siblings to SOURCE, not to built dist: a vi
 
 `packages/core/vitest.config.ts`, `packages/mcp/tsconfig.json`, `packages/core/tsconfig.json`
 
+### decision
+
+Anchor `kind` is always serialized explicitly, and leads every anchor map.
+
+Zod discriminates before defaults apply, so an omitted discriminator is a hard
+reject rather than a fallback to `git` — and papering over that with a preprocess
+step would cost more than the one line it saves. Emitting `kind` makes v0.2's
+lockfile-hash and API-contract anchors purely additive: any reader written against
+v1 files already handles the discriminator. Leading with it makes anchor diffs
+scannable in PR review.
+
+`packages/spec/src/schema.ts#gitAnchorSchema`, `packages/spec/src/serialize.ts#ANCHOR_KEY_ORDER`
+
 ### convention
 
 Every injectable boundary needs at least one test through the real thing. Injecting a dependency to make a unit test easy also makes the suite structurally unable to exercise the path that ships, and the resulting failure is silent success rather than an error. Proven twice here: the in-memory MCP transport hid nothing only because a stdio test spawned the real binary, and an injected `ask` hid a readline that drained piped stdin during setup and discarded the human's answer while reporting success.
 
 `packages/cli/src/commands/review.ts`, `packages/cli/src/cli.test.ts`, `packages/mcp/src/server.test.ts`
+
+### decision
+
+The wire schema is the Memfile standard; Date tolerance is a one-directional
+reader courtesy of this implementation.
+
+`z.date()` has no JSON Schema representation, so projecting the file schema threw
+at module load — total, silent failure of every downstream import until first use.
+The published JSON Schema, and therefore what any external implementer targets, is
+strings-only. All writes validate against the wire schema, so a Date can never
+reach disk, and a tool emitting real YAML timestamps is not spec-compliant however
+forgiving our reader is.
+
+`packages/spec/src/schema.ts#memoryWireSchema`, `packages/spec/src/json-schema.ts#memoryJsonSchema`
+
+### decision
+
+Timestamps serialize double-quoted, in canonical UTC second precision, by explicit
+serializer rule.
+
+js-yaml (via gray-matter) applies the YAML 1.1 schema, which silently coerces an
+unquoted ISO timestamp into a Date — an invisible mutation that breaks byte-exact
+round-trips and pollutes diffs. The rule is stated explicitly rather than left to
+the emitter's quoting heuristics, because those heuristics are what let the
+coercion through. Offsets are normalized, not rejected, so a memory written in
+Kochi and re-verified in London never produces a timezone-representation diff.
+
+`packages/spec/src/schema.ts#CANONICAL_TIMESTAMP_RE`, `packages/spec/src/serialize.ts#TIMESTAMP_KEYS`
