@@ -6,7 +6,10 @@ import { Membook } from "./membook.js";
 
 export const COMMIT = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
 
-export async function tempRepo(): Promise<{ root: string; cleanup: () => Promise<void> }> {
+export async function tempRepo(): Promise<{
+  root: string;
+  cleanup: () => Promise<void>;
+}> {
   const root = await mkdtemp(join(tmpdir(), "membook-test-"));
   return { root, cleanup: () => rm(root, { recursive: true, force: true }) };
 }
@@ -18,7 +21,10 @@ export interface SeedSpec {
   paths?: string[];
 }
 
-export function memoryFor(spec: SeedSpec): { frontmatter: MemoryInput; body: string } {
+export function memoryFor(spec: SeedSpec): {
+  frontmatter: MemoryInput;
+  body: string;
+} {
   return {
     body: spec.body,
     frontmatter: {
@@ -32,7 +38,10 @@ export function memoryFor(spec: SeedSpec): { frontmatter: MemoryInput; body: str
       ...(spec.status && spec.status !== "unverified"
         ? { verified: "2026-07-24T08:00:00Z" }
         : {}),
-      anchors: (spec.paths ?? ["src/auth.ts"]).map((path) => ({ path, commit: COMMIT })),
+      anchors: (spec.paths ?? ["src/auth.ts"]).map((path) => ({
+        path,
+        commit: COMMIT,
+      })),
       provenance: {
         origin: "authored",
         author: "agent",
@@ -77,9 +86,8 @@ export const CORPUS: SeedSpec[] = [
 
 export async function seeded(root: string): Promise<Membook> {
   const membook = new Membook(root);
-  for (const spec of CORPUS) {
-    const { frontmatter, body } = memoryFor(spec);
-    await membook.remember(frontmatter, body);
-  }
+  // One batch, one index open: dozens of open/WAL/close cycles per test are
+  // what pushed the Windows CI runners past the test timeout.
+  await membook.rememberMany(CORPUS.map(memoryFor));
   return membook;
 }

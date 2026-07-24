@@ -82,6 +82,56 @@ export class Membook {
     frontmatter: MemoryInput,
     body: string
   ): Promise<StoredMemory> {
+    const stored = await this.writeThroughGuards(frontmatter, body);
+    const db = this.open();
+    try {
+      this.indexOne(db, stored);
+    } finally {
+      db.close();
+    }
+    return stored;
+  }
+
+  /**
+   * `remember`, for callers holding a whole batch: seeding, distillation,
+   * anything replaying a corpus. Same file-first ordering and per-memory
+   * guard as `remember`, but the index is opened once per batch instead of
+   * once per memory — the repeated open/WAL/close cycle is cheap on POSIX
+   * and expensive enough on Windows to matter at corpus sizes.
+   *
+   * A blocked write stops the batch there, but the memories already on disk
+   * are still indexed before the error propagates: files are the truth, and
+   * the index must follow them however far the batch got.
+   */
+  async rememberMany(
+    entries: ReadonlyArray<{ frontmatter: MemoryInput; body: string }>
+  ): Promise<StoredMemory[]> {
+    const stored: StoredMemory[] = [];
+    try {
+      for (const entry of entries) {
+        stored.push(
+          await this.writeThroughGuards(entry.frontmatter, entry.body)
+        );
+      }
+    } finally {
+      if (stored.length > 0) {
+        const db = this.open();
+        try {
+          db.transaction(() => {
+            for (const memory of stored) this.indexOne(db, memory);
+          })();
+        } finally {
+          db.close();
+        }
+      }
+    }
+    return stored;
+  }
+
+  private async writeThroughGuards(
+    frontmatter: MemoryInput,
+    body: string
+  ): Promise<StoredMemory> {
     let stored: StoredMemory;
     try {
       stored = await this.store.write(frontmatter, body);
@@ -104,28 +154,24 @@ export class Membook {
       type: stored.memfile.frontmatter.type,
       anchors: stored.memfile.frontmatter.anchors.length,
     });
-
-    const db = this.open();
-    try {
-      const existing = db
-        .prepare("SELECT rowid FROM memories WHERE id = ?")
-        .get(stored.id) as { rowid: number } | undefined;
-      if (existing) removeFromIndex(db, stored.id);
-      const nextRowid =
-        existing?.rowid ??
-        (
-          db
-            .prepare("SELECT COALESCE(MAX(rowid), 0) AS max FROM memories")
-            .get() as {
-            max: number;
-          }
-        ).max + 1;
-      indexMemory(db, stored, nextRowid);
-    } finally {
-      db.close();
-    }
-
     return stored;
+  }
+
+  private indexOne(db: IndexDb, stored: StoredMemory): void {
+    const existing = db
+      .prepare("SELECT rowid FROM memories WHERE id = ?")
+      .get(stored.id) as { rowid: number } | undefined;
+    if (existing) removeFromIndex(db, stored.id);
+    const nextRowid =
+      existing?.rowid ??
+      (
+        db
+          .prepare("SELECT COALESCE(MAX(rowid), 0) AS max FROM memories")
+          .get() as {
+          max: number;
+        }
+      ).max + 1;
+    indexMemory(db, stored, nextRowid);
   }
 
   async forget(id: string): Promise<void> {
