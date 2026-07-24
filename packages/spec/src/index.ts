@@ -55,4 +55,13 @@ export {
   type Memfile,
 } from "./serialize.js";
 
+export {
+  UnsupportedMemfileVersionError,
+  MEMFILE_SCHEMAS,
+  SUPPORTED_MEMFILE_VERSIONS,
+  readDeclaredVersion,
+  schemaForVersion,
+  type VersionedMemorySchema,
+} from "./versions.js";
+
 export { memoryJsonSchema } from "./json-schema.js";

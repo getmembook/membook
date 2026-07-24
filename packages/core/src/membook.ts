@@ -36,6 +36,8 @@ export interface StatusReport {
   indexed: number;
   onDisk: number;
   quarantined: QuarantineRecord[];
+  /** Files this Membook is too old to read. Not damaged — just newer. */
+  needsNewerMembook: Array<{ file: string; found: number; supported: number }>;
   byStatus: Record<string, number>;
 }
 
@@ -228,7 +230,8 @@ export class Membook {
   }
 
   async status(): Promise<StatusReport> {
-    const { memories, quarantined } = await this.store.readAll();
+    const { memories, quarantined, needsNewerMembook } =
+      await this.store.readAll();
     const db = this.open();
     try {
       const indexed = (
@@ -239,7 +242,13 @@ export class Membook {
         const status = memory.memfile.frontmatter.status;
         byStatus[status] = (byStatus[status] ?? 0) + 1;
       }
-      return { indexed, onDisk: memories.length, quarantined, byStatus };
+      return {
+        indexed,
+        onDisk: memories.length,
+        quarantined,
+        needsNewerMembook,
+        byStatus,
+      };
     } finally {
       db.close();
     }

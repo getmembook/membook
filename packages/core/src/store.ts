@@ -7,6 +7,7 @@ import {
   resolveMemoryId,
   safeParseMemfile,
   serializeMemfile,
+  UnsupportedMemfileVersionError,
   type Memfile,
   type MemoryInput,
 } from "@membook/spec";
@@ -26,6 +27,15 @@ export interface StoredMemory {
 export interface ReadAllResult {
   memories: StoredMemory[];
   quarantined: QuarantineRecord[];
+  /**
+   * Files written by a NEWER Membook than this one.
+   *
+   * Kept apart from `quarantined` deliberately. A quarantined file is damaged
+   * and wants repairing; these are perfectly valid and want a newer tool.
+   * Merging them would tell someone to hand-edit a file that is fine, and
+   * every command that reads the store would otherwise crash on a single one.
+   */
+  needsNewerMembook: Array<{ file: string; found: number; supported: number }>;
 }
 
 export interface MemoryStoreOptions {
@@ -96,11 +106,29 @@ export class MemoryStore {
   async readAll(): Promise<ReadAllResult> {
     const memories: StoredMemory[] = [];
     const quarantined: QuarantineRecord[] = [];
+    const needsNewerMembook: ReadAllResult["needsNewerMembook"] = [];
 
     for (const file of await this.listFiles()) {
       const path = join(this.paths.memories, file);
       const text = await readFile(path, "utf8");
-      const parsed = safeParseMemfile(text, file);
+
+      let parsed;
+      try {
+        parsed = safeParseMemfile(text, file);
+      } catch (error) {
+        // A file from the future is not damaged, and must not take down every
+        // other memory in the store with it.
+        if (error instanceof UnsupportedMemfileVersionError) {
+          needsNewerMembook.push({
+            file,
+            found: error.found,
+            supported: error.supported,
+          });
+          continue;
+        }
+        throw error;
+      }
+
       if (!parsed.ok) {
         quarantined.push({
           file,
@@ -113,7 +141,7 @@ export class MemoryStore {
     }
 
     await this.recordQuarantine(quarantined);
-    return { memories, quarantined };
+    return { memories, quarantined, needsNewerMembook };
   }
 
   /**

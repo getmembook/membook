@@ -75,6 +75,26 @@ export async function status(options: StatusOptions): Promise<void> {
   }
   log("");
 
+  if (report.needsNewerMembook.length > 0) {
+    const n = report.needsNewerMembook.length;
+    log(
+      warn(
+        `${n} ${plural(n, "file needs", "files need")} a newer Membook: ` +
+          report.needsNewerMembook
+            .map((f) => `${f.file} (v${f.found})`)
+            .join(", ")
+      )
+    );
+    log(
+      dim(
+        `  This Membook reads up to v${
+          report.needsNewerMembook[0]!.supported
+        }. The files are not damaged — upgrade rather than editing them.`
+      )
+    );
+    log("");
+  }
+
   const stale = report.byStatus["stale"] ?? 0;
   const invalid = report.byStatus["invalidated"] ?? 0;
   const unverified = report.byStatus["unverified"] ?? 0;

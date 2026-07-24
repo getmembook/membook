@@ -244,3 +244,69 @@ describe("Membook facade", () => {
     expect(report.byStatus["unverified"]).toBe(2);
   });
 });
+
+/**
+ * A FILE FROM THE FUTURE MUST NOT TAKE THE STORE DOWN WITH IT.
+ *
+ * `memfile` is a `z.literal`, so a v2 file makes a v1 reader throw. That error
+ * was propagating straight out of `readAll`, which every command depends on —
+ * so a single memory written by a newer Membook would crash `status`, `verify`
+ * and `book` alike, in a repository whose other memories were all fine.
+ *
+ * It is also NOT quarantine: the file is valid, and telling someone to repair
+ * it would send them to hand-edit correct data.
+ */
+describe("a memory written by a newer Membook", () => {
+  const future = (id: string) =>
+    `---\nmemfile: 99\nid: ${id}\ntype: gotcha\nstatus: unverified\nscope: repo\nconfidence: 0.9\ncreated: "2026-07-24T12:00:00Z"\nanchors:\n  - kind: git\n    path: src/a.ts\n    commit: ${"a".repeat(
+      40
+    )}\nprovenance:\n  origin: authored\n  author: human\n---\n\nFrom a later version.\n`;
+
+  it("is reported without crashing, and without being called damaged", async () => {
+    const { root, cleanup } = await tempRepo();
+    try {
+      const store = new MemoryStore(repoPaths(root));
+      await mkdir(repoPaths(root).memories, { recursive: true });
+      await writeFile(
+        join(repoPaths(root).memories, "m-fa70.mem.md"),
+        future("m-fa70"),
+        "utf8"
+      );
+
+      const result = await store.readAll();
+
+      // Proves the file was actually READ, not skipped by a filename filter —
+      // an earlier version of this test passed because the id was not hex and
+      // the store never opened it at all.
+      expect(result.needsNewerMembook).toHaveLength(1);
+      expect(result.needsNewerMembook[0]!.file).toBe("m-fa70.mem.md");
+      expect(result.needsNewerMembook[0]!.found).toBe(99);
+      expect(result.quarantined).toHaveLength(0);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("does not prevent the readable memories from being read", async () => {
+    const { root, cleanup } = await tempRepo();
+    try {
+      const store = new MemoryStore(repoPaths(root));
+      await mkdir(repoPaths(root).memories, { recursive: true });
+      await writeFile(
+        join(repoPaths(root).memories, "m-fa70.mem.md"),
+        future("m-fa70"),
+        "utf8"
+      );
+      await store.write(
+        memoryFor({ body: "A perfectly ordinary memory." }).frontmatter,
+        "A perfectly ordinary memory."
+      );
+
+      const result = await store.readAll();
+      expect(result.memories).toHaveLength(1);
+      expect(result.needsNewerMembook).toHaveLength(1);
+    } finally {
+      await cleanup();
+    }
+  });
+});
