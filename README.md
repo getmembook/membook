@@ -88,13 +88,13 @@ wrote a memory, from what, and in what context, purely from which fields exist.
 
 | Package                            | What it is                                               | State                |
 | ---------------------------------- | -------------------------------------------------------- | -------------------- |
-| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator | **Built**, 101 tests |
-| [`@membook/core`](./packages/core) | Engine — store, index, verify, recall, book, distill     | **Built**, 225 tests |
+| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator | **Built**, 114 tests |
+| [`@membook/core`](./packages/core) | Engine — store, index, verify, recall, book, distill     | **Built**, 232 tests |
 | [`@membook/mcp`](./packages/mcp)   | MCP server (`remember` / `recall` / `session_digest`)    | **Built**, 24 tests  |
 | Verify pass                        | The verification loop + fixture harness                  | **Built**            |
 | Boot pack                          | `MEMBOOK.md` generator                                   | **Built**            |
 | The three seams                    | Secret scanner, LLM re-checker, instrumentation          | **Built**            |
-| [`membook`](./packages/cli)        | CLI — see below                                          | **Built**, 79 tests  |
+| [`membook`](./packages/cli)        | CLI — see below                                          | **Built**, 81 tests  |
 | Distillation                       | Docs and sessions → candidate memories                   | **Built**            |
 
 ### Commands

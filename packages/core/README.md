@@ -119,7 +119,7 @@ other way would mark memories true because nobody was watching, which is the
 exact failure this project exists to prevent.
 
 ```ts
-const report = await membook.verify({ rechecker: new ClaudeRechecker() });
+const report = await membook.verify({ rechecker: new LlmRechecker({ provider }) });
 await membook.verify({ dryRun: true }); // report without writing
 ```
 
@@ -242,7 +242,7 @@ honest about it. The launch-blocking secret scanner is build step 6 and slots
 in as an implementation, with no call-site changes:
 
 ```ts
-const membook = new Membook(root, { guards: [new GitleaksGuard()] });
+const membook = new Membook(root, { guards: [new SecretScanGuard()] });
 ```
 
 ## Usage
