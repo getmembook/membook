@@ -10,7 +10,7 @@ truth rather than in order of what seemed clever to build.
 
 v0.1 does not ship until all five hold, on this log's evidence:
 
-- [ ] Cold `npx membook init` works on a clean machine
+- [x] Cold `npx membook init` works on a clean machine — 2026-07-24
 - [ ] The signature demo runs unrehearsed — a memory drifts, `status` says so,
       and the next session gets the corrected book
 - [ ] Instrumentation shows a non-zero recall hit rate
@@ -21,6 +21,39 @@ Evidence lives in `.membook/telemetry/events.jsonl`, which is local and
 gitignored. Paste the relevant lines into an entry rather than committing it.
 
 ## Entries
+
+### 2026-07-24 — first gate closed: cold start works
+
+**What happened.** Published `0.1.0-alpha.0` to npm, then ran
+`npx membook@alpha init` — first time anyone has experienced Membook as a
+user rather than as its author.
+
+**What the tool did.** Worked. The binary linked, the workspace-protocol fix
+held, dependencies resolved from the registry. Run inside this repo it took
+the idempotent path and left everything alone; run in a brand-new project it
+created `.membook/memories/`, wrote the gitignore rules, and emitted
+`MEMBOOK.md`.
+
+The unplanned result was better than the intended one. Running it here
+regenerated `MEMBOOK.md` and produced **no diff at all** — a package
+installed from npm produced byte-identical output to the local build. The
+determinism invariant, proven across two separate installations of the tool
+without anyone setting out to test that.
+
+**What annoyed me.** Two things, both cosmetic and both real.
+
+`npx` prints `npm warn deprecated prebuild-install@7.1.3: No longer
+maintained` before Membook says anything. It comes from `better-sqlite3` and
+we cannot fix it, but it is the first line a new user reads, and it says
+"unmaintained" about software they just installed.
+
+npm also set `latest` on every package despite `--tag alpha`, because npm
+forces `latest` on a package's first publish regardless of the tag. So
+`npm install membook` now installs the alpha, which is exactly what the alpha
+strategy was meant to prevent. Left as-is — the version string says
+`alpha`, nobody knows the package exists, and the first real `0.1.0` will
+overwrite it — but the lesson is that `--tag` does not protect a first
+publish.
 
 ### 2026-07-24 — the clock starts
 
