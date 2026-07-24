@@ -38,14 +38,14 @@ jobs:
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
 
+      # No `registry-url` here, deliberately. It writes an .npmrc whose auth
+      # line references ${NODE_AUTH_TOKEN}; with no token in this repo, npm
+      # meeting an undefined env var in config fails outright. There is nothing
+      # for it to authenticate anyway — see the env block below.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
-          # Writes the auth line publish needs into .npmrc, reading the token
-          # from NODE_AUTH_TOKEN below. The token never appears in a file we
-          # commit.
-          registry-url: "https://registry.npmjs.org"
 
       - run: pnpm install --frozen-lockfile
 
@@ -59,11 +59,22 @@ jobs:
           publish: pnpm release
           commit: "chore: version packages"
           title: "chore: version packages"
+          # Commit through the GitHub API rather than git on the runner, so the
+          # version-PR commits carry GitHub's signature and satisfy the
+          # required-signatures rule on main. With the default git-cli mode the
+          # bot's commit is unsigned and every release needs an admin bypass —
+          # measured on the first release, not theorized.
+          commitMode: github-api
         env:
-          # Signs the changelog links and opens the PR.
+          # Opens the version PR, pushes its branch, signs the changelog links.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The npm automation token. Scoped to publish only; see the release
-          # runbook. Provenance below is what makes it verifiable regardless.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           # Attach a provenance statement to every published tarball.
+          #
+          # There is NO npm token here, and that is the design: all four
+          # packages have a trusted publisher configured on npmjs.com bound to
+          # this repo and this workflow filename, and the action exchanges the
+          # job's OIDC identity (`id-token: write` above) for a short-lived
+          # publish credential. Nothing stored, nothing to rotate, nothing to
+          # leak. If this file is ever RENAMED, update the trusted-publisher
+          # settings on all four packages or publishing 403s.
           NPM_CONFIG_PROVENANCE: "true"
