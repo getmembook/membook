@@ -11,22 +11,43 @@ truth rather than in order of what seemed clever to build.
 v0.1 does not ship until all five hold, on this log's evidence:
 
 - [x] Cold `npx membook init` works on a clean machine — 2026-07-24
-- [ ] The signature demo runs unrehearsed — a memory drifts, `status` says so,
-      and the next session gets the corrected book
-- [ ] Instrumentation shows a non-zero recall hit rate
-- [ ] At least one genuine staleness catch, on work nobody staged for it
-- [ ] Zero secrets ever written
+- [x] The signature demo runs unrehearsed — 2026-07-24/25. Release-day work
+      nobody staged drifted four memories; `status` said so; the book withheld
+      them and said why. Rename-following proven live (`docs/roadmap.md` →
+      `docs/product-roadmap.md`, anchor rewritten) and 41/41 in the history
+      backtest across three real repos.
+- [x] Instrumentation shows a non-zero recall hit rate — 2026-07-25. 2 of 4
+      logged recalls served ≥1 memory, including the first live hook
+      injection: the pnpm-publish gotcha, served into a real session's
+      context, anchors attached.
+- [x] At least one genuine staleness catch, on work nobody staged for it —
+      2026-07-24, twice: `m-d394` at 14:22 and `m-83be`/`m-9c90` at 19:17,
+      all from ordinary release-day commits.
+- [x] Zero secrets ever written — held to date, and this one never closes:
+      it is a standing invariant, not a milestone. Evidence so far: one
+      `write_blocked` at the scanner, two full-history gitleaks scans clean
+      (including post-rewrite), query redaction live, and one credential a
+      *harness* tried to print was caught by the same scanner.
+
+All five held before anyone declared them: `0.1.0` shipped on the release
+pipeline the day the last four closed, which is the right order of events
+even though nobody planned it — the gates were closed by accumulated
+evidence, not by wanting to ship.
 
 ## Also measure, for v0.2
 
 Free to collect while the clock runs, expensive to discover afterwards.
 
-- [ ] **Merge style of every producer repo in the Stag workspace.** If squash
-      merges are common, cross-repo anchors are orphaned on every merge and
-      contract-watch-lite collapses into permanent `unresolvable`. The
-      contingent hedge — a blob hash alongside the commit — is designed and
-      waiting in [v0.2-workspaces.md](design/v0.2-workspaces.md) §11, but the
-      measurement decides whether it gets built.
+- [x] **Merge style of every producer repo in the Stag workspace.** Measured
+      2026-07-25, across eleven repos and ~700 commits: squash merges are
+      **~1%** of history in the target workspace (8 commits total, all in the
+      two big client repos). Direct commits dominate everywhere; where PRs
+      exist they are merge commits, which preserve the original SHAs that
+      anchors point at. The one squash-heavy repo in the sample is
+      **membook itself** (17/52, 33%) — GitHub-flow OSS style. Ruling recorded
+      in [v0.2-workspaces.md](design/v0.2-workspaces.md) §11: the blob-hash
+      hedge is **deferred for the workspace federation** and revisits when
+      cross-repo anchoring meets squash-flow repos in the wild.
 
 Evidence lives in `.membook/telemetry/events.jsonl`, which is local and
 gitignored. Paste the relevant lines into an entry rather than committing it.
