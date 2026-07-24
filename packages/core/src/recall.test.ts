@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computeMemoryId, type MemoryInput } from "@membook/spec";
 import { Membook } from "./membook.js";
-import { pathAffinity, RANKING } from "./recall.js";
+import {
+  pathAffinity,
+  RANKING,
+  evidenceFactor,
+  matchedTerms,
+} from "./recall.js";
 import { tempRepo } from "./test-helpers.js";
 
 let root: string;
@@ -396,5 +401,54 @@ describe("the absolute floor", () => {
       { now: NOW, minScore: RANKING.pushFloor }
     );
     expect(hits).toHaveLength(1);
+  });
+});
+
+/**
+ * Found by replaying 61 real prompts from this repo's own sessions against its
+ * own memories — the first time retrieval was measured on questions nobody
+ * invented for it.
+ *
+ * "WHat is next" reduced to the single term `next`, found it in "the next
+ * person" inside a memory about gitleaks, and scored 1.25: the maximum, and
+ * the top-ranked result of the whole replay. Coverage is a ratio, so a
+ * one-term query is 0 or 1 with nothing between — and stopword filtering made
+ * it worse by shrinking the denominator to one common word.
+ */
+describe("one matched word is not evidence", () => {
+  beforeEach(async () => {
+    await seed({
+      body: "Never add a gitleaks allowlist for scanner test fixtures; assemble fake secrets at runtime so the next person does not disable the guard.",
+      paths: ["src/auth.ts"],
+    });
+  });
+
+  it("does not let a single common word reach full relevance", async () => {
+    const { hits } = await membook.recall("what is next", { now: NOW });
+    // It may still be the best of a bad set — the relative floor guarantees
+    // that — but it must not look like a confident match.
+    expect(hits[0]?.score ?? 0).toBeLessThan(RANKING.pushFloor * 2);
+  });
+
+  it("keeps full relevance when several terms genuinely match", async () => {
+    const { hits } = await membook.recall(
+      "gitleaks allowlist scanner fixtures",
+      { now: NOW }
+    );
+    expect(hits[0]!.score).toBeGreaterThan(RANKING.pushFloor);
+  });
+
+  it("damps by evidence, not by ratio", () => {
+    expect(evidenceFactor(0)).toBe(0);
+    expect(evidenceFactor(1)).toBe(0.5);
+    expect(evidenceFactor(2)).toBe(1);
+    expect(evidenceFactor(9)).toBe(1);
+  });
+
+  it("counts distinct matched terms", () => {
+    const body = "auth tokens refresh on the request boundary";
+    expect(matchedTerms(body, ["auth", "tokens"])).toBe(2);
+    expect(matchedTerms(body, ["auth", "kubernetes"])).toBe(1);
+    expect(matchedTerms(body, ["kubernetes", "helm"])).toBe(0);
   });
 });

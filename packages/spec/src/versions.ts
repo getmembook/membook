@@ -3,6 +3,7 @@ import {
   MEMFILE_SPEC_VERSION,
   memorySchema,
   memoryWireSchema,
+  type Memory,
 } from "./schema.js";
 
 /**
@@ -65,10 +66,19 @@ export class UnsupportedMemfileVersionError extends Error {
  * because the wire schema is the standard and the file schema is our reader's
  * concession to `js-yaml`.
  */
+/**
+ * Typed on `Memory`, not on bare `z.ZodType`.
+ *
+ * An untyped schema makes `safeParse` return `unknown`, which compiles fine in
+ * tests — vitest runs the source — and only fails when tsup emits declarations.
+ * Every version must therefore parse to the CURRENT `Memory` shape, which is
+ * the real contract anyway: older versions are read by widening them into
+ * today's type, never by leaking a second shape into callers.
+ */
 export interface VersionedMemorySchema {
   readonly version: number;
-  readonly file: z.ZodType;
-  readonly wire: z.ZodType;
+  readonly file: z.ZodType<Memory>;
+  readonly wire: z.ZodType<Memory>;
 }
 
 /**

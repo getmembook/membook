@@ -114,6 +114,10 @@ export {
 export {
   recall,
   pathAffinity,
+  queryTerms,
+  termCoverage,
+  matchedTerms,
+  evidenceFactor,
   RANKING,
   type RecallOptions,
   type RecallResult,

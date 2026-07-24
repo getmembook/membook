@@ -45,6 +45,14 @@ export const RANKING = {
    */
   pushFloor: 0.4,
 
+  /**
+   * Matched terms needed before relevance is trusted in full.
+   *
+   * Two, because one common word landing inside a memory is a coincidence and
+   * two independent terms is the smallest thing that is not.
+   */
+  evidenceFullAt: 2,
+
   /** Half-life for recency decay. */
   recencyHalfLifeDays: 90,
 
@@ -216,15 +224,15 @@ export function queryTerms(query: string): string[] {
  * judge: stemming trades a real miss against a class of false positives, and
  * that trade should be made on logged misses, not on taste.
  */
-export function termCoverage(body: string, terms: readonly string[]): number {
-  if (terms.length === 0) return 1;
+/** How many distinct query terms the body actually contains. */
+export function matchedTerms(body: string, terms: readonly string[]): number {
   const words = new Set(
     body
       .toLowerCase()
       .split(/[^a-z0-9_./-]+/)
       .filter(Boolean)
   );
-  const matches = terms.filter(
+  return terms.filter(
     (t) =>
       words.has(t) ||
       // Path-ish terms still match as substrings: a query for `auth.ts` should
@@ -232,8 +240,35 @@ export function termCoverage(body: string, terms: readonly string[]): number {
       (t.includes("/") || t.includes(".")
         ? body.toLowerCase().includes(t)
         : false)
-  );
-  return matches.length / terms.length;
+  ).length;
+}
+
+export function termCoverage(body: string, terms: readonly string[]): number {
+  if (terms.length === 0) return 1;
+  return matchedTerms(body, terms) / terms.length;
+}
+
+/**
+ * ONE MATCHED WORD IS NOT EVIDENCE, WHATEVER THE RATIO SAYS.
+ *
+ * Coverage is a ratio, so a one-term query scores 0 or 1 with nothing in
+ * between. Measured against 61 real prompts from this repo's own sessions,
+ * "WHat is next" reduced to the single term `next`, found it in "the next
+ * person" inside a memory about gitleaks, and scored 1.25 — the maximum, and
+ * the highest-ranked result in the entire replay.
+ *
+ * Stopword filtering made this worse rather than better: stripping `what` and
+ * `is` shrank the denominator to one common word, so the vaguest questions
+ * became the most confident matches. The fix that improved precision on long
+ * queries degraded it on short ones, which is only visible against real
+ * traffic — the eleven queries this was originally tuned on were all specific.
+ *
+ * Damping by how much evidence exists, rather than by what fraction of a tiny
+ * query it represents, restores the intended meaning: two independent term
+ * matches is weak-but-real, one is a coincidence.
+ */
+export function evidenceFactor(matched: number): number {
+  return Math.min(1, matched / RANKING.evidenceFullAt);
 }
 
 export interface RecallHit {
@@ -399,8 +434,14 @@ export function recall(
     // Coverage scales relevance rather than sitting beside it: a memory that
     // answers a quarter of the question is a quarter as relevant, however
     // strongly BM25 weighted the one term it happened to match.
-    const coverage = termCoverage(row.body, terms);
-    const relevance = Math.min(1, Math.abs(row.rank) / scale) * coverage;
+    const matched = matchedTerms(row.body, terms);
+    const coverage = terms.length === 0 ? 1 : matched / terms.length;
+    // Evidence damps the ratio: a one-term query cannot reach full relevance
+    // on a single common word, however perfect its coverage looks.
+    const relevance =
+      Math.min(1, Math.abs(row.rank) / scale) *
+      coverage *
+      evidenceFactor(matched);
     const proximity = contextPaths.length
       ? Math.max(
           0,

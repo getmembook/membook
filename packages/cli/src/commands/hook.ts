@@ -1,4 +1,9 @@
-import { Membook, RANKING, type RecallHit } from "@membook/core";
+import {
+  Membook,
+  RANKING,
+  queryTerms,
+  type RecallHit,
+} from "@membook/core";
 
 /**
  * THE HARNESS-DRIVEN READ PATH.
@@ -27,6 +32,21 @@ export const HOOK_MAX_HITS = 3;
 
 /** Below this a prompt is conversational and recall would only add noise. */
 const MIN_QUERY_CHARS = 12;
+
+/**
+ * A vague prompt is not a query, and must not trigger an injection.
+ *
+ * Measured against 61 real prompts from this repo's sessions: "WHat is next",
+ * "what is next for us" and "done - what is next" all cleared the push floor
+ * and would have injected a memory about gitleaks. They are 12+ characters, so
+ * the length gate passed them; they carry one content word, so nothing else
+ * stopped them.
+ *
+ * Three content terms is where a prompt starts being ABOUT something. It costs
+ * a few marginal true positives — "CI failed" no longer injects — and silence
+ * is the right way to be wrong on a surface that fires on every prompt.
+ */
+export const MIN_QUERY_TERMS = 3;
 
 export interface HookOptions {
   root: string;
@@ -76,6 +96,7 @@ export async function hookPrompt(options: HookOptions): Promise<void> {
         : "";
 
     if (prompt.trim().length < MIN_QUERY_CHARS) return;
+    if (queryTerms(prompt).length < MIN_QUERY_TERMS) return;
 
     const membook = new Membook(options.root, { instrumentation: true });
     const { hits } = await membook.recall(prompt, {

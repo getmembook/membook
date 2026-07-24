@@ -1430,3 +1430,44 @@ describe("book and reindex", () => {
     expect(output()).toContain("Rebuilt the index from 1 memory");
   });
 });
+
+/**
+ * The hook's own gate, measured on 61 real prompts. Vague prompts were 29.5%
+ * of real traffic and produced the worst injections — "WHat is next" pulled in
+ * a memory about gitleaks. Length alone did not stop them: they clear 12
+ * characters comfortably while carrying one content word.
+ */
+describe("recall hook ignores vague prompts", () => {
+  const event = (prompt: string): string => JSON.stringify({ prompt });
+
+  beforeEach(async () => {
+    await init({ root, log });
+    await remember({
+      root,
+      statement:
+        "Never add a gitleaks allowlist for scanner fixtures; the next person would inherit a disabled guard.",
+      type: "convention",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    lines = [];
+  });
+
+  it("says nothing for a prompt with too few content terms", async () => {
+    for (const q of ["WHat is next", "what is next for us", "done - what now"]) {
+      lines = [];
+      await hookPrompt({ root, log, readInput: async () => event(q) });
+      expect(output()).toBe("");
+    }
+  });
+
+  it("still answers a prompt that is actually about something", async () => {
+    await hookPrompt({
+      root,
+      log,
+      readInput: async () =>
+        event("why does the gitleaks allowlist matter for scanner fixtures"),
+    });
+    expect(flat()).toContain("gitleaks");
+  });
+});
