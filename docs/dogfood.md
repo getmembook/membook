@@ -17,6 +17,17 @@ v0.1 does not ship until all five hold, on this log's evidence:
 - [ ] At least one genuine staleness catch, on work nobody staged for it
 - [ ] Zero secrets ever written
 
+## Also measure, for v0.2
+
+Free to collect while the clock runs, expensive to discover afterwards.
+
+- [ ] **Merge style of every producer repo in the Stag workspace.** If squash
+      merges are common, cross-repo anchors are orphaned on every merge and
+      contract-watch-lite collapses into permanent `unresolvable`. The
+      contingent hedge — a blob hash alongside the commit — is designed and
+      waiting in [v0.2-workspaces.md](design/v0.2-workspaces.md) §11, but the
+      measurement decides whether it gets built.
+
 Evidence lives in `.membook/telemetry/events.jsonl`, which is local and
 gitignored. Paste the relevant lines into an entry rather than committing it.
 
@@ -207,7 +218,7 @@ with the withheld sentence correctly absent.
 
 **What happened.** The floor read above was the rubber-stamp outcome, not the
 near-miss it first looked like. Verdict accuracy was never the metric: a model
-that restores for bad reasons will restore *false* memories for bad reasons
+that restores for bad reasons will restore _false_ memories for bad reasons
 too, and our test set was known-true, so 3/3 measured the test set rather than
 the checker.
 
