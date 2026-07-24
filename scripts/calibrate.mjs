@@ -108,11 +108,13 @@ const CASES = [
 `,
     statement:
       "The database connection pool is capped at ten in development to surface leaks early.",
-    // Both are safe. `invalidated` is arguably the BETTER answer — the claim is
-    // now demonstrably false, not merely unconfirmed — and the first draft of
-    // this harness scored that as WRONG. Where more than one verdict is
-    // defensible, the harness must not invent a preference it cannot justify.
-    accept: ["stale", "invalidated"],
+    // History, in order: the first draft demanded `stale` and scored a
+    // defensible `invalidated` as WRONG; the second accepted both. Then a live
+    // read settled it the other way — a 3B invalidated a still-TRUE memory
+    // over a version bump — so model invalidates now land as `stale` in the
+    // product itself, and only deterministic evidence or a human can destroy.
+    // `stale` is therefore the only outcome the product can produce here.
+    accept: ["stale"],
     restorable: false,
     why: "The number the memory asserts was changed. Restoring this would put a false claim in front of an engineer as fact.",
   },
@@ -130,7 +132,7 @@ const CASES = [
 `,
     statement:
       "Queue consumers are idempotent; redelivery after a broker restart is normal and safe.",
-    accept: ["stale", "invalidated"],
+    accept: ["stale"],
     restorable: false,
     why: "The dedupe guard the claim depends on was deleted. Nothing in the file supports it any more.",
   },
