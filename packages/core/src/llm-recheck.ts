@@ -31,8 +31,28 @@ const verdictSchema = z
   .object({
     verdict: z.enum(VERDICTS),
     reason: z.string().min(1),
+    /**
+     * A verbatim quote from the anchored file at HEAD. Required to restore,
+     * and checked against the actual file before the restore is accepted.
+     */
+    evidence: z.string().optional(),
   })
   .strict();
+
+/**
+ * Whitespace-insensitive containment.
+ *
+ * Models reflow and re-indent what they quote, so an exact match would reject
+ * honest citations. Collapsing whitespace on both sides keeps the check about
+ * whether the code is really there, not about how it was formatted.
+ */
+export function quoteAppearsIn(haystack: string, quote: string): boolean {
+  const normalise = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  const needle = normalise(quote);
+  // Too short to mean anything — a model quoting `}` proves nothing.
+  if (needle.length < 8) return false;
+  return normalise(haystack).includes(needle);
+}
 
 /** Maps the model's vocabulary onto memory statuses. */
 const TO_STATUS: Record<(typeof VERDICTS)[number], RecheckVerdict> = {
@@ -54,6 +74,12 @@ const SYSTEM = [
   "contradiction is not evidence. If the change is ambiguous, if you cannot see",
   "enough to be sure, or if the statement is only partly outdated, the answer is",
   "`still-stale`.",
+  "",
+  'To restore, you MUST quote verbatim, in an "evidence" field, the exact line',
+  "or lines in the CURRENT code that make the statement true. That quotation is",
+  "checked against the file: if it does not appear there, the restore is",
+  "rejected and the memory stays stale. Do not paraphrase, and do not quote the",
+  "memory back at yourself — quote the code.",
   "",
   "Reply with JSON only.",
 ].join("\n");
@@ -106,6 +132,31 @@ export class LlmRechecker implements AnchorRechecker {
     this.maxContextChars = options.maxContextChars ?? 4000;
   }
 
+  /**
+   * Does the cited evidence actually exist in the anchored code at HEAD?
+   *
+   * Checked across every anchored file, since a memory may span several and
+   * the model is not told which one to quote from.
+   *
+   * With no `readAnchor` configured we cannot check, and an unverifiable
+   * claim is not a verified one: no reader means no grounding, which means no
+   * restore. That is deliberately strict — the alternative is trusting a
+   * citation nobody can confirm, which is the exact failure being fixed.
+   */
+  private async isGrounded(
+    request: RecheckRequest,
+    evidence: string | undefined
+  ): Promise<boolean> {
+    if (evidence === undefined || evidence.trim().length === 0) return false;
+    if (!this.readAnchor) return false;
+
+    for (const anchor of request.memory.anchors) {
+      const content = await this.readAnchor(anchor.path);
+      if (content !== null && quoteAppearsIn(content, evidence)) return true;
+    }
+    return false;
+  }
+
   private async buildPrompt(request: RecheckRequest): Promise<string> {
     const { memory, body, touched } = request;
     const parts: string[] = [
@@ -143,7 +194,7 @@ export class LlmRechecker implements AnchorRechecker {
 
     parts.push(
       "",
-      'Reply with JSON only: {"verdict": "restore" | "still-stale" | "invalidate", "reason": "<one sentence citing the specific code or change that decided it>"}'
+      'Reply with JSON only: {"verdict": "restore" | "still-stale" | "invalidate", "reason": "<one sentence>", "evidence": "<verbatim quote from the CURRENT content above — required to restore, and checked against the file>"}'
     );
     return parts.join("\n");
   }
@@ -187,7 +238,7 @@ export class LlmRechecker implements AnchorRechecker {
             "",
             "Your previous reply was not valid JSON matching the required shape.",
             "Reply with ONLY this JSON object and nothing else:",
-            '{"verdict": "restore" | "still-stale" | "invalidate", "reason": "<one sentence>"}',
+            '{"verdict": "restore" | "still-stale" | "invalidate", "reason": "<one sentence>", "evidence": "<verbatim quote, required to restore>"}',
           ].join("\n"),
         });
         parsed = verdictSchema.safeParse(extractJson(retry.text));
@@ -213,11 +264,50 @@ export class LlmRechecker implements AnchorRechecker {
     }
 
     const verdict = TO_STATUS[parsed.data.verdict];
+
+    // GROUND THE RESTORE.
+    //
+    // A restore is the only verdict that grants trust back, so it is the only
+    // one that can launder staleness. The first live re-check returned three
+    // restores whose stated reasons cited a different memory's subject, argued
+    // for caution, and were factually wrong — right verdicts by coincidence,
+    // because the memories happened to be true. A model that restores for bad
+    // reasons will restore FALSE memories for bad reasons too.
+    //
+    // So the citation is checked rather than believed: the quoted evidence
+    // must actually appear in the anchored file at HEAD. This is the product's
+    // own move — verify the claim against reality — turned on its re-checker.
+    // Deterministic, model-agnostic, and it fails in the safe direction: a
+    // rubber-stamping model can no longer restore, only fail to.
+    let grounded: boolean | undefined;
+    if (verdict === "verified") {
+      grounded = await this.isGrounded(request, parsed.data.evidence);
+      if (!grounded) {
+        this.instrumentation.record({
+          event: "recheck",
+          id,
+          verdict: "stale",
+          checker: this.name,
+          reason_grounded: false,
+          ...(repaired ? { repaired: true } : {}),
+        });
+        return {
+          verdict: "stale",
+          reason: parsed.data.evidence
+            ? `restore rejected: the cited evidence does not appear in the anchored code (${JSON.stringify(
+                parsed.data.evidence.slice(0, 60)
+              )}), so the memory stays stale`
+            : "restore rejected: no verbatim evidence was cited from the anchored code, so the memory stays stale",
+        };
+      }
+    }
+
     this.instrumentation.record({
       event: "recheck",
       id,
       verdict,
       checker: this.name,
+      ...(grounded !== undefined ? { reason_grounded: grounded } : {}),
       ...(repaired ? { repaired: true } : {}),
     });
 

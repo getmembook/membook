@@ -1,4 +1,14 @@
-# Re-check Prompt — v1
+# Re-check Prompt — v2
+
+> **v2 (2026-07-24): a restore must cite evidence, and the citation is
+> checked.** The first live re-check returned three restores whose reasons
+> cited a different memory's subject, argued for caution, and were factually
+> wrong. The verdicts matched ground truth only because the memories happened
+> to be true — a model that restores for bad reasons will restore _false_
+> memories for bad reasons too. Prose alone cannot be trusted, so a restore
+> now requires a verbatim `evidence` quote which is string-matched against the
+> anchored file. Unmatched evidence is a non-answer: the memory stays stale
+> and the verdict is logged `reason_grounded: false`.
 
 > This file is versioned and reviewed like code. It is the model-facing prompt
 > used when a memory's anchored code has changed and something must decide
@@ -50,9 +60,13 @@ Decide one of:
 
 Reply with JSON only:
 {"verdict": "restore" | "still-stale" | "invalidate",
- "reason": "one sentence citing the specific code or change that decided it"}
+ "reason": "one sentence",
+ "evidence": "verbatim quote from the CURRENT code — required to restore"}
 
-The reason must cite evidence, not restate the verdict.
+The evidence must be copied verbatim from the CURRENT code shown above. It is
+string-matched against the file: a quote that does not appear there rejects
+the restore. Do not paraphrase, and do not quote the memory back — quote the
+code.
 ```
 
 ## Repair prompt

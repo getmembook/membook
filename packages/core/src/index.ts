@@ -73,6 +73,7 @@ export {
 export {
   LlmRechecker,
   VERDICTS,
+  quoteAppearsIn,
   type LlmRecheckerOptions,
 } from "./llm-recheck.js";
 export {

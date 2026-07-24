@@ -58,3 +58,63 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
+
+  # The "works locally, broken from the registry" class of failure.
+  #
+  # `npm pack` once shipped `workspace:*` unresolved, so the install failed and
+  # the binary never linked — `npx membook` silently did nothing. Nothing in
+  # the test suite could see it, because the suite runs from source. This packs
+  # like a release, installs like a user, and runs the binary.
+  packaged:
+    name: packaged install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # pnpm pack, not npm pack: only pnpm resolves the workspace protocol.
+      - name: Pack every package
+        run: |
+          mkdir -p /tmp/pkg
+          for p in spec core mcp cli; do
+            (cd packages/$p && pnpm pack --pack-destination /tmp/pkg)
+          done
+
+      - name: No unresolved workspace protocol in any tarball
+        run: |
+          for f in /tmp/pkg/*.tgz; do
+            if tar -xzOf "$f" package/package.json | grep -q '"workspace:'; then
+              echo "::error::$f ships an unresolved workspace protocol"
+              exit 1
+            fi
+          done
+
+      - name: Install as a user would, and run the binary
+        run: |
+          cd "$(mktemp -d)"
+          npm init -y >/dev/null
+          npm install /tmp/pkg/membook-spec-*.tgz /tmp/pkg/membook-core-*.tgz \
+                      /tmp/pkg/membook-mcp-*.tgz /tmp/pkg/membook-0*.tgz
+          test -x node_modules/.bin/membook || { echo "::error::binary did not link"; exit 1; }
+          ./node_modules/.bin/membook --version
+
+      - name: The book a packaged install generates is byte-identical
+        run: |
+          cd "$(mktemp -d)"
+          git init -q --initial-branch=main
+          git config user.email ci@example.test && git config user.name CI
+          mkdir -p src && echo "export const a = 1;" > src/a.ts
+          git add -A && git commit -qm "init"
+          npm init -y >/dev/null
+          npm install /tmp/pkg/membook-spec-*.tgz /tmp/pkg/membook-core-*.tgz \
+                      /tmp/pkg/membook-mcp-*.tgz /tmp/pkg/membook-0*.tgz >/dev/null
+          ./node_modules/.bin/membook init >/dev/null
+          cp MEMBOOK.md /tmp/book-first.md
+          ./node_modules/.bin/membook book >/dev/null
+          diff /tmp/book-first.md MEMBOOK.md

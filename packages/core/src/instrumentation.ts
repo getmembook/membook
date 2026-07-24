@@ -52,6 +52,16 @@ export interface RecheckEvent {
   repaired?: boolean;
   /** Present when it failed and the skeptical default was used instead. */
   failed?: boolean;
+  /**
+   * Whether a restore cited evidence that actually appears in the anchored
+   * code. Only set when a restore was attempted.
+   *
+   * This — not naive verdict accuracy — is the number worth publishing. The
+   * first live read scored 100% on verdicts while citing evidence that did
+   * not support them, so a verdict-only metric would have reported a
+   * rubber-stamp as a perfect score.
+   */
+  reason_grounded?: boolean;
 }
 
 export interface WriteBlockedEvent {

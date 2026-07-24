@@ -152,7 +152,7 @@ path, and it behaved exactly as specified: an unreachable model is not evidence
 of anything, so nothing was restored and nothing was assumed. The dangerous
 outcome here was a false restore on an API error, and it did not happen.
 
-### 2026-07-24 — the floor read: right verdicts, wrong reasoning
+### 2026-07-24 — the floor read: the re-checker rubber-stamped
 
 **What happened.** Twelve failed re-checks against a local Ollama, all
 attributed to `gpt-4o-mini`, because the model override existed only as
@@ -160,8 +160,10 @@ attributed to `gpt-4o-mini`, because the model override existed only as
 `verify --recheck --model qwen2.5-coder:3b` against the three known-true
 memories.
 
-**What the tool did.** 3/3 `restore`. Matching ground truth — but read the
-reasons the prompt demanded:
+**What the tool did.** 3/3 `restore` — **ungrounded**. The verdicts matched
+ground truth, but only because we deliberately chose known-true memories for
+the experiment. That is a property of the test set, not evidence of
+competence. Read the reasons the prompt demanded:
 
 - `m-83be` (about **quoted UTC timestamps**): _"`gitAnchorSchema` was
   modified, and now requires `commitSha`."_ A different memory's subject
@@ -200,6 +202,32 @@ says it is configuration rather than transience.
 
 From "carries the one eligible memory, 3 further withheld" to full coverage,
 with the withheld sentence correctly absent.
+
+### 2026-07-24 — grounding the restore
+
+**What happened.** The floor read above was the rubber-stamp outcome, not the
+near-miss it first looked like. Verdict accuracy was never the metric: a model
+that restores for bad reasons will restore *false* memories for bad reasons
+too, and our test set was known-true, so 3/3 measured the test set rather than
+the checker.
+
+**What changed.** A restore now has to cite evidence, and the citation is
+checked. The model returns a verbatim `evidence` quote from the anchored file;
+Membook string-matches it against the file at HEAD before accepting. An
+unmatched quote is a non-answer — the memory stays stale and the event is
+logged `reason_grounded: false`.
+
+This is the product's own move turned on its own re-checker: verify the claim
+against reality rather than trust the claim. It is deterministic,
+model-agnostic, and it fails in the safe direction — a rubber-stamping model
+can no longer restore, only fail to restore.
+
+The number worth publishing is therefore **grounded-restore rate**, not naive
+verdict accuracy, which would have scored this checker 100%.
+
+**Still pending.** The frontier read. It now discriminates cleanly: a model
+that cites real code restores; one that produces plausible prose cannot. That
+is a better experiment than the one it replaces.
 
 ### Pending
 

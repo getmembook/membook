@@ -26,6 +26,9 @@ const MEMORY: Memory = {
   },
 };
 
+const ANCHORED_CODE =
+  "export function refreshToken() { return onRequestBoundary(); }";
+
 const REQUEST: RecheckRequest = {
   memory: MEMORY,
   body: "Auth tokens refresh on the request boundary.",
@@ -110,8 +113,9 @@ describe("well-formed verdicts", () => {
   it("restores on an explicit restore", async () => {
     const rechecker = new LlmRechecker({
       provider: providerReplying(
-        '{"verdict": "restore", "reason": "refreshToken still runs on the request boundary at line 42"}'
+        '{"verdict": "restore", "reason": "refreshToken still runs on the request boundary", "evidence": "return onRequestBoundary();"}'
       ),
+      readAnchor: async () => ANCHORED_CODE,
     });
     const result = await rechecker.recheck(REQUEST);
     expect(result.verdict).toBe("verified");
@@ -139,12 +143,151 @@ describe("well-formed verdicts", () => {
   it("unwraps a fenced JSON reply rather than spending a repair on formatting", async () => {
     const rechecker = new LlmRechecker({
       provider: providerReplying(
-        '```json\n{"verdict": "restore", "reason": "still true at line 42"}\n```'
+        '```json\n{"verdict": "restore", "reason": "still true", "evidence": "return onRequestBoundary();"}\n```'
       ),
+      readAnchor: async () => ANCHORED_CODE,
     });
     const provider = providerReplying("");
     void provider;
     expect((await rechecker.recheck(REQUEST)).verdict).toBe("verified");
+  });
+});
+
+/**
+ * THE GROUNDING INVARIANT.
+ *
+ * A restore is the only verdict that grants trust back, so it is the only one
+ * that can launder staleness. The first live re-check returned three restores
+ * whose stated reasons cited a different memory's subject, argued for caution,
+ * and were factually wrong — right verdicts only because the memories happened
+ * to be true. A model that restores for bad reasons will restore FALSE
+ * memories for bad reasons too.
+ *
+ * So the citation is checked against the file rather than believed. A
+ * rubber-stamping model can no longer restore; it can only fail to.
+ */
+describe("INVARIANT: a restore must cite evidence that really exists", () => {
+  const CODE =
+    "export function refreshToken() {\n  return onRequestBoundary();\n}\n";
+  const grounded = (verdict: string, evidence?: string): ModelProvider => ({
+    name: "fake",
+    model: "test",
+    async complete() {
+      return {
+        text: JSON.stringify({
+          verdict,
+          reason: "some reason",
+          ...(evidence !== undefined ? { evidence } : {}),
+        }),
+        inputTokens: null,
+        outputTokens: null,
+      };
+    },
+  });
+
+  const withCode = (provider: ModelProvider, log?: Instrumentation) =>
+    new LlmRechecker({
+      provider,
+      readAnchor: async () => CODE,
+      ...(log ? { instrumentation: log } : {}),
+    });
+
+  it("accepts a restore whose evidence appears in the code", async () => {
+    const r = await withCode(
+      grounded("restore", "return onRequestBoundary();")
+    ).recheck(REQUEST);
+    expect(r.verdict).toBe("verified");
+  });
+
+  it("rejects a restore whose evidence is not in the code", async () => {
+    const r = await withCode(
+      grounded("restore", "return setTimeout(refresh, 300000);")
+    ).recheck(REQUEST);
+    expect(r.verdict).toBe("stale");
+    expect(r.reason).toMatch(/cited evidence does not appear/);
+  });
+
+  it("rejects a restore that cites no evidence at all", async () => {
+    const r = await withCode(grounded("restore")).recheck(REQUEST);
+    expect(r.verdict).toBe("stale");
+    expect(r.reason).toMatch(/no verbatim evidence/);
+  });
+
+  // The actual 3B failure: plausible prose about a real symbol from a
+  // different file, which no amount of reading the reason would catch.
+  it("rejects the rubber-stamp that started this", async () => {
+    const r = await withCode(
+      grounded(
+        "restore",
+        "`gitAnchorSchema` was modified, and now requires `commitSha`"
+      )
+    ).recheck(REQUEST);
+    expect(r.verdict).toBe("stale");
+  });
+
+  it("rejects a trivially short quote that proves nothing", async () => {
+    const r = await withCode(grounded("restore", "}")).recheck(REQUEST);
+    expect(r.verdict).toBe("stale");
+  });
+
+  it("tolerates reformatted whitespace in an honest quote", async () => {
+    const r = await withCode(
+      grounded("restore", "export   function\n   refreshToken()   {")
+    ).recheck(REQUEST);
+    expect(r.verdict).toBe("verified");
+  });
+
+  it("cannot restore when nothing can read the code to check against", async () => {
+    // No readAnchor: the citation is unverifiable, and an unverifiable claim
+    // is not a verified one.
+    const r = await new LlmRechecker({
+      provider: grounded("restore", "return onRequestBoundary();"),
+    }).recheck(REQUEST);
+    expect(r.verdict).toBe("stale");
+  });
+
+  it("does not require evidence to stay stale or to invalidate", async () => {
+    expect(
+      (await withCode(grounded("still-stale")).recheck(REQUEST)).verdict
+    ).toBe("stale");
+    expect(
+      (await withCode(grounded("invalidate")).recheck(REQUEST)).verdict
+    ).toBe("invalidated");
+  });
+});
+
+describe("grounding telemetry", () => {
+  const CODE = "export function refreshToken() {}\n";
+
+  it("records reason_grounded true on an accepted restore", async () => {
+    const log = recorder();
+    await new LlmRechecker({
+      provider: providerReplying(
+        '{"verdict":"restore","reason":"still true","evidence":"export function refreshToken()"}'
+      ),
+      instrumentation: log,
+      readAnchor: async () => CODE,
+    }).recheck(REQUEST);
+    expect(log.events[0]).toMatchObject({
+      verdict: "verified",
+      reason_grounded: true,
+    });
+  });
+
+  it("records reason_grounded false when a restore is rejected", async () => {
+    const log = recorder();
+    await new LlmRechecker({
+      provider: providerReplying(
+        '{"verdict":"restore","reason":"trust me","evidence":"nothing like this exists"}'
+      ),
+      instrumentation: log,
+      readAnchor: async () => CODE,
+    }).recheck(REQUEST);
+    // Logged as what actually happened, not as what was asked for.
+    expect(log.events[0]).toMatchObject({
+      verdict: "stale",
+      reason_grounded: false,
+    });
   });
 });
 
@@ -163,9 +306,12 @@ describe("the repair attempt", () => {
   it("accepts a repaired reply", async () => {
     const provider = providerReplying(
       "Sure, I think so.",
-      '{"verdict": "restore", "reason": "confirmed at line 42"}'
+      '{"verdict": "restore", "reason": "confirmed", "evidence": "return onRequestBoundary();"}'
     );
-    const rechecker = new LlmRechecker({ provider });
+    const rechecker = new LlmRechecker({
+      provider,
+      readAnchor: async () => ANCHORED_CODE,
+    });
     expect((await rechecker.recheck(REQUEST)).verdict).toBe("verified");
   });
 
@@ -193,9 +339,10 @@ describe("instrumentation", () => {
     const log = recorder();
     const rechecker = new LlmRechecker({
       provider: providerReplying(
-        '{"verdict": "restore", "reason": "still true"}'
+        '{"verdict": "restore", "reason": "still true", "evidence": "return onRequestBoundary();"}'
       ),
       instrumentation: log,
+      readAnchor: async () => ANCHORED_CODE,
     });
     await rechecker.recheck(REQUEST);
     expect(log.events).toHaveLength(1);
@@ -230,8 +377,11 @@ describe("instrumentation", () => {
   it("attributes the verdict to a named checker", async () => {
     const log = recorder();
     await new LlmRechecker({
-      provider: providerReplying('{"verdict": "restore", "reason": "ok"}'),
+      provider: providerReplying(
+        '{"verdict": "restore", "reason": "ok", "evidence": "return onRequestBoundary();"}'
+      ),
       instrumentation: log,
+      readAnchor: async () => ANCHORED_CODE,
     }).recheck(REQUEST);
     expect((log.events[0] as { checker: string }).checker).toBe(
       "llm:fake:test"
