@@ -6,26 +6,35 @@
     <title>Membook — memory that stays true</title>
     <meta
       name="description"
-      content="Verifiable memory for coding agents. Every memory is anchored to a commit and re-checked against the code, so stale knowledge is reported rather than asserted."
+      content="A verifiable memory engine for coding agents. Every memory is anchored to a commit, a file, a symbol — so when the code changes, the memory knows."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
     />
     <style>
+      /* Tokens from the Membook Web Kit. */
       :root {
-        --bg: #ffffff;
-        --fg: #1a1a1a;
-        --dim: #6b7280;
-        --accent: #0969da;
-        --card: #f6f8fa;
-        --border: #d1d9e0;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #0d1117;
-          --fg: #e6edf3;
-          --dim: #8b949e;
-          --accent: #58a6ff;
-          --card: #161b22;
-          --border: #30363d;
-        }
+        --bg: #f4f6f8;
+        --surface: #ffffff;
+        --ink: #171b21;
+        --body: #414b57;
+        --dim: #5c6672;
+        --faint: #8a94a1;
+        --border: #dde2e8;
+        --border-soft: #e6eaef;
+        --hairline: #eef1f4;
+        --accent: #2f4a66;
+        --dot: #7d9ec4;
+        --ok: #2f6f4f;
+        --ok-bg: #eef4f0;
+        --ok-border: #cfe1d6;
+        --warn: #8a6a1f;
+        --warn-bg: #f9f6ee;
+        --sans: "IBM Plex Sans", system-ui, sans-serif;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
       }
       * {
         box-sizing: border-box;
@@ -33,111 +42,582 @@
       }
       body {
         background: var(--bg);
-        color: var(--fg);
-        font: 17px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-          sans-serif;
-        max-width: 42rem;
-        margin: 0 auto;
-        padding: 4rem 1.25rem 6rem;
-      }
-      h1 {
-        font-size: 2rem;
-        letter-spacing: -0.02em;
-      }
-      .tagline {
-        color: var(--dim);
-        font-size: 1.15rem;
-        margin: 0.35rem 0 2.25rem;
-      }
-      p {
-        margin: 1rem 0;
-      }
-      strong {
-        font-weight: 600;
-      }
-      pre {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 0.85rem 1.1rem;
-        overflow-x: auto;
-        margin: 1.5rem 0;
-        font: 0.95rem/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      }
-      code {
-        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      }
-      ul {
-        padding-left: 1.2rem;
-        margin: 1rem 0;
-      }
-      li {
-        margin: 0.45rem 0;
+        color: var(--ink);
+        font: 15px/1.6 var(--sans);
       }
       a {
-        color: var(--accent);
+        color: inherit;
         text-decoration: none;
       }
-      a:hover {
-        text-decoration: underline;
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 0 20px;
       }
-      .links {
-        margin-top: 2.5rem;
+
+      /* Site header — sticky, one row, no dropdowns. */
+      header {
+        position: sticky;
+        top: 0;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        z-index: 10;
+      }
+      .header-row {
         display: flex;
-        gap: 1.5rem;
         flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 22px;
+        padding: 12px 0;
       }
-      footer {
-        margin-top: 4rem;
+      .mark {
+        width: 20px;
+        height: 20px;
+        background: var(--ink);
+        border-radius: 3.5px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding-bottom: 5px;
+      }
+      .mark span:first-child {
+        font: 500 11px/0.72 var(--mono);
+        color: #fff;
+      }
+      .mark span:last-child {
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--dot);
+        margin-left: 1px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand b {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      nav {
+        display: flex;
+        gap: 18px;
+        align-items: center;
+      }
+      nav a {
+        font-size: 13px;
         color: var(--dim);
-        font-size: 0.9rem;
+      }
+      nav a:hover {
+        color: var(--ink);
+      }
+      .header-right {
+        margin-left: auto;
+        font: 10.5px var(--mono);
+        color: var(--dim);
+      }
+      .header-right a {
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 4px 9px;
+      }
+      .header-right a:hover {
+        background: var(--bg);
+      }
+
+      /* Hero — claim, badge row, install, two actions. */
+      .hero {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        padding: 46px 44px 40px;
+        margin-top: 28px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        gap: 40px;
+        align-items: start;
+      }
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .badge {
+        display: flex;
+        font: 10px var(--mono);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .badge span {
+        padding: 3px 6px;
+        background: var(--bg);
+        color: var(--dim);
+      }
+      .badge span + span {
+        border-left: 1px solid var(--border);
+      }
+      .badge .ok {
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+      .badge .plain {
+        background: var(--surface);
+        color: var(--ink);
+      }
+      .hero h1 {
+        font-size: 42px;
+        line-height: 1.08;
+        font-weight: 600;
+        letter-spacing: -0.035em;
+        max-width: 20ch;
+        margin: 18px 0;
+      }
+      .hero .sub {
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--body);
+        max-width: 48ch;
+        text-wrap: pretty;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 22px;
+      }
+      .btn {
+        font-size: 13px;
+        font-weight: 500;
+        padding: 9px 16px;
+        border-radius: 4px;
+        border: 1px solid var(--ink);
+      }
+      .btn.primary {
+        background: var(--ink);
+        color: #fff;
+      }
+      .btn.primary:hover {
+        background: #262d36;
+      }
+      .btn.secondary {
+        background: var(--surface);
+        border-color: #cfd6de;
+      }
+      .btn.secondary:hover {
+        background: var(--bg);
+      }
+
+      /* Memory card — the artifact itself, as the hero's one visual. */
+      .memcard {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        font: 11.5px/1.7 var(--mono);
+      }
+      .memcard .path {
+        padding: 8px 14px;
+        background: var(--bg);
+        color: var(--dim);
+        border-bottom: 1px solid var(--border-soft);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .chip {
+        font: 10px var(--mono);
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border-radius: 3px;
+      }
+      .chip.ok {
+        color: var(--ok);
+        background: var(--ok-bg);
+        border: 1px solid var(--ok-border);
+      }
+      .memcard pre {
+        padding: 12px 14px;
+        overflow-x: auto;
+        color: var(--body);
+      }
+      .memcard .k {
+        color: var(--accent);
+      }
+      .memcard .s {
+        color: var(--ok);
+      }
+
+      /* Section heading rows, kit-style: number, title, note. */
+      .sec {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 8px;
+        margin: 44px 0 16px;
+      }
+      .sec .n {
+        font: 10.5px var(--mono);
+        color: var(--accent);
+      }
+      .sec b {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .sec span {
+        font-size: 12px;
+        color: var(--faint);
+      }
+
+      /* Install block. */
+      .install {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        overflow: hidden;
+        max-width: 480px;
+      }
+      .install .row {
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .install code {
+        font: 12.5px var(--mono);
+        color: var(--ink);
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .install button {
+        margin-left: auto;
+        flex: 0 0 auto;
+        font: 10.5px var(--mono);
+        padding: 4px 9px;
+        border: 1px solid #cfd6de;
+        border-radius: 3px;
+        cursor: pointer;
+        color: var(--dim);
+        background: none;
+      }
+      .install button:hover {
+        background: var(--bg);
+      }
+
+      /* Verification loop — the site's one explanatory graphic. */
+      .loop {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        padding: 26px 28px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .loop > div {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 22px;
+        border-right: 1px solid var(--border-soft);
+      }
+      .loop > div:first-child {
+        padding-left: 0;
+      }
+      .loop > div:last-child {
+        padding-right: 0;
+        border-right: 0;
+      }
+      .loop .n {
+        font: 10.5px var(--mono);
+        color: var(--accent);
+      }
+      .loop b {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .loop p {
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--dim);
+      }
+      .loop code {
+        font: 11.5px var(--mono);
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      .chip.warn {
+        color: var(--warn);
+        background: var(--warn-bg);
+        border: 1px solid var(--border);
+      }
+      .chip.gone {
+        color: var(--dim);
+        background: var(--hairline);
+        border: 1px solid var(--border);
+      }
+
+      /* Commitments. */
+      .commit-list {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .commit-list > div {
+        padding: 15px 20px;
+        display: grid;
+        grid-template-columns: 210px minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: baseline;
+      }
+      .commit-list > div + div {
+        border-top: 1px solid var(--hairline);
+      }
+      .commit-list b {
+        font-size: 13.5px;
+        font-weight: 600;
+      }
+      .commit-list p {
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--dim);
+      }
+      .commit-list .state {
+        font: 10.5px var(--mono);
+        color: var(--ok);
+        text-align: right;
+      }
+
+      /* Footer. */
+      footer {
+        margin: 56px 0 48px;
+        border-top: 1px solid var(--border);
+        padding-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 22px;
+        align-items: baseline;
+        font-size: 12.5px;
+        color: var(--dim);
+      }
+      footer a:hover {
+        color: var(--ink);
+      }
+      footer .mit {
+        margin-left: auto;
+        font: 10.5px var(--mono);
+        color: var(--faint);
+      }
+
+      @media (max-width: 760px) {
+        .hero {
+          grid-template-columns: 1fr;
+          padding: 30px 24px;
+        }
+        .loop {
+          grid-template-columns: 1fr;
+          gap: 18px;
+        }
+        .loop > div {
+          padding: 0;
+          border-right: 0;
+        }
+        .commit-list > div {
+          grid-template-columns: 1fr;
+          gap: 6px;
+        }
+        .commit-list .state {
+          text-align: left;
+        }
       }
     </style>
   </head>
   <body>
-    <h1>Membook</h1>
-    <p class="tagline">Memory that stays true.</p>
+    <header>
+      <div class="wrap header-row">
+        <a class="brand" href="/membook/">
+          <span class="mark"><span>m</span><span></span></span>
+          <b>membook</b>
+        </a>
+        <nav>
+          <a href="https://github.com/getmembook/membook#readme">Docs</a>
+          <a
+            href="https://github.com/getmembook/membook/tree/main/packages/spec"
+            >Anchor spec</a
+          >
+          <a
+            href="https://github.com/getmembook/membook/blob/main/CONTRIBUTING.md"
+            >Contributing</a
+          >
+        </nav>
+        <div class="header-right">
+          <a href="https://github.com/getmembook/membook">GitHub ↗</a>
+        </div>
+      </div>
+    </header>
 
-    <p>
-      Coding agents forget. Worse, they misremember — a note saying
-      <em>“we use Jest”</em> survives the migration to Vitest and gets handed to
-      the next agent as fact. Every agent-memory tool on the market stores text
-      that nothing keeps honest.
-    </p>
-    <p>
-      Membook anchors each memory to something checkable — a commit, a file, a
-      symbol. When the code moves, the memory knows: it is re-verified, marked
-      stale, or invalidated, and a memory that can no longer be trusted is
-      <strong>withheld rather than asserted</strong>.
-    </p>
+    <main class="wrap">
+      <section class="hero">
+        <div>
+          <div class="badges">
+            <span class="badge"
+              ><span>CI</span><span class="ok">passing</span></span
+            >
+            <span class="badge"
+              ><span>npm</span><span class="plain">v0.1.0</span></span
+            >
+            <span class="badge"
+              ><span>license</span><span class="plain">MIT</span></span
+            >
+            <span class="badge"
+              ><span>node</span><span class="plain">&ge;20</span></span
+            >
+          </div>
+          <h1>Memory that stays true.</h1>
+          <p class="sub">
+            A verifiable memory engine for coding agents. Every memory is
+            anchored to a commit, a file, a symbol — so when the code changes,
+            the memory knows.
+          </p>
+          <div class="actions">
+            <a
+              class="btn primary"
+              href="https://github.com/getmembook/membook#readme"
+              >Get started</a
+            >
+            <a
+              class="btn secondary"
+              href="https://github.com/getmembook/membook/tree/main/packages/spec"
+              >Read the anchor spec</a
+            >
+          </div>
+        </div>
+        <div class="memcard">
+          <div class="path">
+            .membook/memories/m-4f2a.mem.md
+            <span class="chip ok" style="margin-left: auto">verified</span>
+          </div>
+          <pre><span class="k">type:</span> gotcha
+<span class="k">status:</span> <span class="s">verified</span>
+<span class="k">anchors:</span>
+  - <span class="k">path:</span> src/auth.ts
+    <span class="k">commit:</span> 8c14b02
+---
+Auth tokens refresh on the request
+boundary, not on a timer — a timer
+drifts and expires sessions mid-flight.</pre>
+        </div>
+      </section>
 
-    <pre><code>npx membook init</code></pre>
+      <div class="sec">
+        <span class="n">01</span><b>The verification loop</b
+        ><span>what no other memory tool does</span>
+      </div>
+      <section class="loop">
+        <div>
+          <span class="n">01</span><b>Anchor</b>
+          <p>
+            Stored with one or more <code>{path, symbol?, commit}</code>. No
+            anchor, no memory.
+          </p>
+        </div>
+        <div>
+          <span class="n">02</span><b>Diff</b>
+          <p>
+            <code>commit..HEAD</code> against the anchor paths, in one pass.
+          </p>
+        </div>
+        <div>
+          <span class="n">03</span><b>Re-check</b>
+          <p>
+            Untouched paths re-verify for free. Touched paths get one targeted
+            re-check.
+          </p>
+        </div>
+        <div>
+          <span class="n">04</span><b>Verdict</b>
+          <div class="chips">
+            <span class="chip ok">verified</span>
+            <span class="chip warn">stale</span>
+            <span class="chip gone">invalidated</span>
+          </div>
+          <p>
+            A memory that can no longer be trusted is withheld from the book
+            rather than asserted.
+          </p>
+        </div>
+      </section>
 
-    <ul>
-      <li>
-        <strong>Files are the truth.</strong> Memories are markdown committed to
-        your repo — they render on GitHub and get reviewed in pull requests. The
-        index is a disposable cache.
-      </li>
-      <li>
-        <strong>No daemon, no network.</strong> The MCP server spawns per
-        session and exits with it. Nothing leaves your machine.
-      </li>
-      <li>
-        <strong>Honest status.</strong> A memory is
-        <code>unverified</code> until something actually verifies it — we would
-        rather show you a thinner book than a flattering one.
-      </li>
-    </ul>
+      <div class="sec">
+        <span class="n">02</span><b>Install</b
+        ><span>one command, no daemon, no account</span>
+      </div>
+      <section class="install">
+        <div class="row">
+          <code id="cmd">npx membook init</code>
+          <button
+            onclick="navigator.clipboard.writeText(document.getElementById('cmd').textContent).then(()=>{this.textContent='copied';setTimeout(()=>this.textContent='copy',1200)})"
+          >
+            copy
+          </button>
+        </div>
+      </section>
 
-    <div class="links">
-      <a href="https://github.com/getmembook/membook">GitHub</a>
-      <a href="https://www.npmjs.com/package/membook">npm</a>
-      <a href="https://github.com/getmembook/membook/tree/main/packages/spec"
-        >The Memfile standard</a
-      >
-    </div>
+      <div class="sec">
+        <span class="n">03</span><b>Commitments</b
+        ><span>each one checkable, none aspirational</span>
+      </div>
+      <section class="commit-list">
+        <div>
+          <b>Files are the truth</b>
+          <p>
+            One markdown file per memory. SQLite is derived, disposable, rebuilt
+            bit-identically.
+          </p>
+          <span class="state">enforced</span>
+        </div>
+        <div>
+          <b>No daemon</b>
+          <p>
+            The MCP server spawns per session on stdio and exits with it. No
+            ports, nothing resident.
+          </p>
+          <span class="state">enforced</span>
+        </div>
+        <div>
+          <b>Local-first</b>
+          <p>No network telemetry, ever.</p>
+          <span class="state">enforced</span>
+        </div>
+        <div>
+          <b>Honest status</b>
+          <p>
+            A memory is unverified until something actually verifies it. Drifted
+            memories are withheld rather than asserted.
+          </p>
+          <span class="state">enforced</span>
+        </div>
+      </section>
 
-    <footer>MIT © Stag.ai Ltd</footer>
+      <footer>
+        <a href="https://github.com/getmembook/membook#readme"
+          >Getting started</a
+        >
+        <a href="https://github.com/getmembook/membook/tree/main/packages/spec"
+          >Anchor spec</a
+        >
+        <a href="https://github.com/getmembook/membook/tree/main/packages/cli"
+          >CLI reference</a
+        >
+        <a href="https://github.com/getmembook/membook/releases">Changelog</a>
+        <a href="https://github.com/getmembook/membook">GitHub</a>
+        <span class="mit">MIT © Stag.ai Ltd</span>
+      </footer>
+    </main>
   </body>
 </html>
