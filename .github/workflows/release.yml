@@ -1,0 +1,69 @@
+name: Release
+
+# Publishing runs from CI, not a laptop. The one time it was manual, a tarball
+# shipped `workspace:*` and the binary never linked — the mistake this file
+# exists to make impossible.
+#
+# The flow has two beats, both triggered by a push to main:
+#
+#   1. There are unreleased changesets -> the changesets action opens a
+#      "Version Packages" PR that bumps versions and writes changelogs. Nothing
+#      is published; a human reviews and merges it.
+#   2. That merge is itself a push to main with no changesets left -> the same
+#      run instead publishes, in dependency order, with provenance.
+#
+# So a release is always a reviewed PR, never a surprise.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: release
+
+permissions:
+  # changesets pushes the Version Packages branch and tags.
+  contents: write
+  # ...and opens the Version Packages pull request.
+  pull-requests: write
+  # PROVENANCE. This is what lets npm attest that the tarball was built from
+  # this repo at this commit — cryptographic proof, for a project whose whole
+  # claim is verifiable memory. Requires a public repo, which this now is.
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          # Writes the auth line publish needs into .npmrc, reading the token
+          # from NODE_AUTH_TOKEN below. The token never appears in a file we
+          # commit.
+          registry-url: "https://registry.npmjs.org"
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          # `version` updates package versions and changelogs from the pending
+          # changesets; `publish` builds and then publishes whatever is newly
+          # versioned. changesets resolves dependency order (spec -> core ->
+          # mcp/cli) itself, retiring the manual ordering releasing.md warns of.
+          version: pnpm changeset version
+          publish: pnpm release
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          # Signs the changelog links and opens the PR.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The npm automation token. Scoped to publish only; see the release
+          # runbook. Provenance below is what makes it verifiable regardless.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Attach a provenance statement to every published tarball.
+          NPM_CONFIG_PROVENANCE: "true"
