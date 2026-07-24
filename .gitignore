@@ -16,3 +16,6 @@ dist/
 
 .env
 .DS_Store
+
+# Local restore of the pre-rewrite backup bundle; never committed.
+recovered/
