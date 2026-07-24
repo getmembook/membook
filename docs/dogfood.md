@@ -33,6 +33,51 @@ gitignored. Paste the relevant lines into an entry rather than committing it.
 
 ## Entries
 
+### 2026-07-24 — first outside repo: recall fired, remember never did
+
+**What happened.** Set Membook up across nine real repos in the client workspace
+and ran one ordinary session in `backend-repo`.
+
+**What the tool did.** The whole telemetry file, preserved here before the
+store was wiped for a clean re-run:
+
+```json
+{
+  "at": "2026-07-24T15:21:30Z",
+  "event": "recall",
+  "query_terms": 3,
+  "served": 0,
+  "withheld_below_floor": 0,
+  "withheld_by_status": {},
+  "top_score": null,
+  "context_paths": 0
+}
+```
+
+One recall. Zero remembers. For contrast, this repo over the same day: 2
+recall, 7 remember — and every one of those seven exists because someone
+deliberately wrote it.
+
+**The finding.** `recall` has a natural pull — "I need to know something".
+Nothing in a session prompts "you just learned something, write it down", so
+the book stays empty, recall keeps returning nothing, and the agent stops
+asking. The failure compounds: that single recall could have been the last
+one. `init` set up storage and left the hardest part — knowing _when_ — to
+whoever remembered to write it by hand.
+
+**What annoyed me.** Two things. The instruction had to be written by a human
+into `CLAUDE.md`, which across nine repos is where "just paste this" stops
+happening — the integration burden `init` exists to remove. And the log said
+`query_terms: 3` without the query, so it could not answer the one question it
+exists for: would a memory have helped?
+
+Both fixed. Descriptions now say _when_; `init` writes one marked line; the
+query is recorded, redacted through the secret scanner.
+
+**Not yet proven.** None of that demonstrates agents will write more. The
+baseline above is the "before"; the next session in `backend-repo` is the
+"after".
+
 ### 2026-07-24 — first gate closed: cold start works
 
 **What happened.** Published `0.1.0-alpha.0` to npm, then ran
