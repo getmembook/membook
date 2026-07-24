@@ -27,12 +27,12 @@
     "typecheck": "tsc --noEmit"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.5.0"
   },
   "dependencies": {
     "@membook/spec": "workspace:*",
     "better-sqlite3": "^11.10.0",
-    "execa": "^10.0.0"
+    "execa": "^9.6.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
