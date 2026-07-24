@@ -15,6 +15,13 @@ import { fileURLToPath } from "node:url";
  * source-pointing exports, every consumer would break.
  */
 export default defineConfig({
+  // 15s, not the 5s default. These suites spawn real git repositories per
+  // test, and Windows CI runners do that slowly enough that book.test.ts
+  // timed out at 5s and its cleanup cascaded into ENOTEMPTY noise. A passing
+  // test is no slower for the headroom; only a hung one waits longer.
+  test: {
+    testTimeout: 15_000,
+  },
   resolve: {
     alias: {
       "@membook/spec": fileURLToPath(

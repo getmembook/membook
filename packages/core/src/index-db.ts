@@ -107,29 +107,47 @@ export interface OpenIndexOptions {
  * synchronous, and a second stdio MCP session opening the same repo will
  * block on the write lock rather than error if journalling is left default.
  */
-export function openIndex(file: string, options: OpenIndexOptions = {}): IndexDb {
+export function openIndex(
+  file: string,
+  options: OpenIndexOptions = {}
+): IndexDb {
   mkdirSync(dirname(file), { recursive: true });
   const db = new Database(file);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
 
-  db.exec(SCHEMA);
+  // EVERY THROW OUT OF HERE MUST CLOSE THE HANDLE FIRST.
+  //
+  // The metadata-mismatch throws below used to leak it, and the leak was
+  // invisible on Linux and macOS because POSIX lets you delete an open file.
+  // Windows does not: the leaked handle made the index undeletable, so the
+  // `reindex` that metadata drift tells the user to run — which heals by
+  // DELETING the file — failed with EBUSY. The error path's own remedy was
+  // blocked by the error path. Found via the advisory Windows CI job, which
+  // exists for exactly this class of divergence.
+  try {
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
 
-  const stored = readMetadata(db);
-  if (Object.keys(stored).length === 0) {
-    if (options.create === false) {
-      throw new IndexMetadataMismatchError([
-        { key: "meta", found: "empty", expected: "stamped index metadata" },
-      ]);
+    db.exec(SCHEMA);
+
+    const stored = readMetadata(db);
+    if (Object.keys(stored).length === 0) {
+      if (options.create === false) {
+        throw new IndexMetadataMismatchError([
+          { key: "meta", found: "empty", expected: "stamped index metadata" },
+        ]);
+      }
+      db.exec(ftsSchema(INDEX_METADATA.tokenizer));
+      writeMetadata(db);
+      return db;
     }
-    db.exec(ftsSchema(INDEX_METADATA.tokenizer));
-    writeMetadata(db);
-    return db;
-  }
 
-  assertMetadataMatches(stored);
-  db.exec(ftsSchema(stored["tokenizer"] ?? INDEX_METADATA.tokenizer));
-  return db;
+    assertMetadataMatches(stored);
+    db.exec(ftsSchema(stored["tokenizer"] ?? INDEX_METADATA.tokenizer));
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 }
 
 export function readMetadata(db: IndexDb): Record<string, string> {
@@ -142,17 +160,19 @@ export function readMetadata(db: IndexDb): Record<string, string> {
 
 export function writeMetadata(db: IndexDb): void {
   const stmt = db.prepare(
-    "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
   );
   const write = db.transaction(() => {
-    for (const [key, value] of Object.entries(INDEX_METADATA)) stmt.run(key, value);
+    for (const [key, value] of Object.entries(INDEX_METADATA))
+      stmt.run(key, value);
   });
   write();
 }
 
 /** Throws IndexMetadataMismatchError listing every drifted key. */
 export function assertMetadataMatches(stored: Record<string, string>): void {
-  const mismatches: Array<{ key: string; found: string; expected: string }> = [];
+  const mismatches: Array<{ key: string; found: string; expected: string }> =
+    [];
   for (const [key, expected] of Object.entries(INDEX_METADATA)) {
     const found = stored[key];
     if (found !== expected) {
