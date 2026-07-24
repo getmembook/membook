@@ -77,8 +77,86 @@ if (commits.length < 20) {
   process.exit(1);
 }
 
-// Seed a third of the way in, leaving two thirds of history to walk through.
-const startIdx = Math.floor(commits.length / 3);
+/**
+ * Seed a third of the way in — unless that would skip every rename.
+ *
+ * Measured on a real repository: all 67 renames sat in the FIRST third of
+ * history, so a fixed seed point walked a window containing none and reported
+ * rename-following as untested. That is the common shape, not an accident —
+ * restructuring happens early and paths settle — so a fixed fraction
+ * systematically blinds the harness to the behaviour it most needs to check.
+ *
+ * So the seed point moves back to sit before the first rename when one exists.
+ * A shorter window measured against real renames beats a longer one measured
+ * against none.
+ */
+const firstRenameIdx = await (async () => {
+  const shas = (
+    await g(["log", "--diff-filter=R", "--find-renames", "--format=%H"])
+  ).stdout
+    .split("\n")
+    .filter(Boolean);
+  if (shas.length === 0) return -1;
+  const oldest = shas.at(-1);
+  return commits.findIndex((c) => c.sha === oldest);
+})();
+
+const CODE = /\.(ts|tsx|js|jsx|py|go|rs|java|cs|rb|php|swift|kt|sql)$/;
+const defaultIdx = Math.floor(commits.length / 3);
+
+/**
+ * Walk back toward the first rename, but only as far as there is still enough
+ * code to anchor to.
+ *
+ * A first attempt guarded with `firstRenameIdx > 1` and silently did nothing,
+ * because the oldest rename sat at index 1 — seeding before it would have
+ * meant the initial commit, where barely any source exists. Two constraints
+ * pull opposite ways: early enough to see renames, late enough to have files.
+ * So satisfy the first, then advance until the second holds.
+ */
+const MIN_ANCHORABLE = Math.max(15, ANCHORS);
+const countSource = async (sha) =>
+  (await g(["ls-tree", "-r", "--name-only", sha])).stdout
+    .split("\n")
+    .filter(
+      (p) => CODE.test(p) && !/(^|\/)(node_modules|dist|build|vendor)\//.test(p)
+    ).length;
+
+/**
+ * ONE SEED POINT CANNOT SERVE BOTH NUMBERS.
+ *
+ * Moving the seed back to capture renames put it at the initial commit, where
+ * the next few commits rewrite everything — half-life came out at 0.0 days,
+ * measuring a project's first-week churn rather than the durability of a
+ * memory about settled code. The fix for one bias produced its mirror image.
+ *
+ * So the modes are explicit. `--renames` seeds early and measures the
+ * mechanics; the default seeds into mature history and measures half-life.
+ * Reporting either number from the wrong window would be worse than not
+ * measuring it.
+ */
+const RENAME_MODE = args.includes("--renames");
+
+let startIdx = defaultIdx;
+if (RENAME_MODE && firstRenameIdx >= 0 && firstRenameIdx <= defaultIdx) {
+  let i = Math.max(0, firstRenameIdx - 1);
+  while (
+    i < defaultIdx &&
+    (await countSource(commits[i].sha)) < MIN_ANCHORABLE
+  ) {
+    i += 1;
+  }
+  startIdx = i;
+}
+
+if (startIdx !== defaultIdx) {
+  console.log(
+    `RENAME MODE: seeded at index ${startIdx} (default ${defaultIdx}) to capture renames.\n` +
+      `Half-life from this window is NOT meaningful — early history rewrites itself.\n` +
+      `Run without --renames for the durability number.\n`
+  );
+}
+
 const start = commits[startIdx];
 const walk = commits.slice(startIdx + 1);
 const step = Math.max(1, Math.floor(walk.length / STEPS));
@@ -93,7 +171,6 @@ await g(["checkout", "--quiet", start.sha]);
  * not config or lockfiles. Sampled across the tree rather than taking the top
  * N, so the result is not dominated by one hot directory.
  */
-const CODE = /\.(ts|tsx|js|jsx|py|go|rs|java|cs|rb|php|swift|kt|sql)$/;
 const tracked = (await g(["ls-files"])).stdout
   .split("\n")
   .filter(
@@ -153,18 +230,71 @@ const ranked = sized
   .map((path) => ({ path, touches: touchCounts.get(path) ?? 0 }))
   .sort((a, b) => b.touches - a.touches);
 
-// Even stride across the ranked list: a spread of hot, warm and cold files.
-const pickStride = Math.max(1, Math.floor(ranked.length / ANCHORS));
-const chosen = ranked
-  .filter((_, i) => i % pickStride === 0)
-  .slice(0, ANCHORS)
+/**
+ * DELIBERATELY ANCHOR TO FILES THAT GET RENAMED.
+ *
+ * The first version of this harness reported "renames followed: 0" against a
+ * repository containing 67 real renames — none of the sampled files happened
+ * to be one. So the backtest silently exercised none of rename-following,
+ * which is the signature demo and the single most-marketed behaviour.
+ *
+ * Random sampling will keep missing it: renames are rare per-file even where
+ * they are common per-repo. The fix is to stop leaving it to chance and
+ * reserve part of the sample for paths git says are renamed during the window.
+ * Anything a harness only tests by luck, it does not test.
+ */
+const renamedDuringWindow = new Map(); // old path -> new path
+{
+  const raw = (
+    await g([
+      "log",
+      "--diff-filter=R",
+      "--find-renames",
+      "--format=",
+      "--name-status",
+      `${start.sha}..${commits.at(-1).sha}`,
+    ])
+  ).stdout
+    .split("\n")
+    .filter((l) => l.startsWith("R"));
+  for (const line of raw) {
+    const [, from, to] = line.split("\t");
+    if (from && to) renamedDuringWindow.set(from, to);
+  }
+}
+
+// Up to a third of the sample, so the number stays a measurement of the loop
+// rather than a demo staged to look good.
+const renameQuota = Math.max(1, Math.floor(ANCHORS / 3));
+const renameCandidates = ranked
+  .filter((r) => renamedDuringWindow.has(r.path))
+  .slice(0, renameQuota)
   .map((r) => r.path);
+
+const remaining = ANCHORS - renameCandidates.length;
+const rest = ranked.filter((r) => !renameCandidates.includes(r.path));
+const pickStride = Math.max(
+  1,
+  Math.floor(rest.length / Math.max(1, remaining))
+);
+const chosen = [
+  ...renameCandidates,
+  ...rest
+    .filter((_, i) => i % pickStride === 0)
+    .slice(0, remaining)
+    .map((r) => r.path),
+];
 
 if (chosen.length === 0) {
   console.error(`no source files over ${MIN_BYTES} bytes at the seed commit.`);
   await rm(dir, { recursive: true, force: true });
   process.exit(1);
 }
+
+console.log(
+  `${renamedDuringWindow.size} renames in window; ` +
+    `${renameCandidates.length} of ${chosen.length} anchors deliberately placed on renamed paths`
+);
 
 const membook = new Membook(dir);
 const seeded = [];
@@ -239,6 +369,38 @@ for (const cp of checkpoints) {
   }
 }
 
+/**
+ * Did the anchor actually end up pointing at the code?
+ *
+ * Counting `renamed` outcomes only proves the loop NOTICED. The claim being
+ * made is stronger — that a memory survives a rename still pointing at the
+ * file — so the check is against where git says the content ended up, after
+ * following the whole chain (a file renamed twice must land on the last name).
+ */
+function resolveRenameChain(path) {
+  const seen = new Set();
+  let current = path;
+  while (renamedDuringWindow.has(current) && !seen.has(current)) {
+    seen.add(current);
+    current = renamedDuringWindow.get(current);
+  }
+  return current;
+}
+
+const renameChecks = [];
+for (const s of seeded) {
+  const expected = resolveRenameChain(s.path);
+  if (expected === s.path) continue; // never renamed; nothing to prove here
+  const stored = await membook.store.read(s.id);
+  const actual = stored.memfile.frontmatter.anchors[0].path;
+  renameChecks.push({
+    from: s.path,
+    expected,
+    actual,
+    ok: actual === expected,
+  });
+}
+
 const survived = seeded.filter((s) => !firstDrift.has(s.id));
 const drifted = [...firstDrift.entries()].map(([id, d]) => ({
   id,
@@ -259,7 +421,20 @@ console.log(`checkpoints verified  ${checkpointsRun}`);
 console.log(`memories seeded       ${seeded.length}`);
 console.log(`drifted               ${drifted.length}`);
 console.log(`never drifted         ${survived.length}`);
-console.log(`renames followed      ${renamesFollowed.length}`);
+console.log(`renames noticed       ${renamesFollowed.length}`);
+if (renameChecks.length > 0) {
+  const ok = renameChecks.filter((r) => r.ok).length;
+  console.log(
+    `RENAME-FOLLOW RATE    ${ok}/${renameChecks.length} anchors landed on the new path`
+  );
+  for (const r of renameChecks.filter((x) => !x.ok)) {
+    console.log(`  MISSED  ${r.from}`);
+    console.log(`    expected ${r.expected}`);
+    console.log(`    actual   ${r.actual}`);
+  }
+} else {
+  console.log(`RENAME-FOLLOW RATE    untested (no sampled anchor was renamed)`);
+}
 
 if (drifted.length > 0) {
   const median = drifted[Math.floor(drifted.length / 2)].days;
