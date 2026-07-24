@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Membook — memory that stays true</title>
+    <meta
+      name="description"
+      content="Verifiable memory for coding agents. Every memory is anchored to a commit and re-checked against the code, so stale knowledge is reported rather than asserted."
+    />
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --dim: #6b7280;
+        --accent: #0969da;
+        --card: #f6f8fa;
+        --border: #d1d9e0;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1117;
+          --fg: #e6edf3;
+          --dim: #8b949e;
+          --accent: #58a6ff;
+          --card: #161b22;
+          --border: #30363d;
+        }
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font: 17px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          sans-serif;
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 4rem 1.25rem 6rem;
+      }
+      h1 {
+        font-size: 2rem;
+        letter-spacing: -0.02em;
+      }
+      .tagline {
+        color: var(--dim);
+        font-size: 1.15rem;
+        margin: 0.35rem 0 2.25rem;
+      }
+      p {
+        margin: 1rem 0;
+      }
+      strong {
+        font-weight: 600;
+      }
+      pre {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.85rem 1.1rem;
+        overflow-x: auto;
+        margin: 1.5rem 0;
+        font: 0.95rem/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      code {
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      ul {
+        padding-left: 1.2rem;
+        margin: 1rem 0;
+      }
+      li {
+        margin: 0.45rem 0;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .links {
+        margin-top: 2.5rem;
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+      }
+      footer {
+        margin-top: 4rem;
+        color: var(--dim);
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Membook</h1>
+    <p class="tagline">Memory that stays true.</p>
+
+    <p>
+      Coding agents forget. Worse, they misremember — a note saying
+      <em>“we use Jest”</em> survives the migration to Vitest and gets handed to
+      the next agent as fact. Every agent-memory tool on the market stores text
+      that nothing keeps honest.
+    </p>
+    <p>
+      Membook anchors each memory to something checkable — a commit, a file, a
+      symbol. When the code moves, the memory knows: it is re-verified, marked
+      stale, or invalidated, and a memory that can no longer be trusted is
+      <strong>withheld rather than asserted</strong>.
+    </p>
+
+    <pre><code>npx membook init</code></pre>
+
+    <ul>
+      <li>
+        <strong>Files are the truth.</strong> Memories are markdown committed to
+        your repo — they render on GitHub and get reviewed in pull requests. The
+        index is a disposable cache.
+      </li>
+      <li>
+        <strong>No daemon, no network.</strong> The MCP server spawns per
+        session and exits with it. Nothing leaves your machine.
+      </li>
+      <li>
+        <strong>Honest status.</strong> A memory is
+        <code>unverified</code> until something actually verifies it — we would
+        rather show you a thinner book than a flattering one.
+      </li>
+    </ul>
+
+    <div class="links">
+      <a href="https://github.com/getmembook/membook">GitHub</a>
+      <a href="https://www.npmjs.com/package/membook">npm</a>
+      <a href="https://github.com/getmembook/membook/tree/main/packages/spec"
+        >The Memfile standard</a
+      >
+    </div>
+
+    <footer>MIT © Stag.ai Ltd</footer>
+  </body>
+</html>
