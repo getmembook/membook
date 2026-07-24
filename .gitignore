@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Membook runtime artifacts — the index is a disposable cache, NEVER canonical.
+# .membook/memories/ and MEMBOOK.md ARE committed (files are the truth).
+.membook/index/
+.membook/quarantine/
+.membook/telemetry/
+*.db
+*.db-wal
+*.db-shm
+
+# local embedding model cache
+.fastembed_cache/
+
+.env
+.DS_Store

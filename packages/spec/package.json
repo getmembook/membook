@@ -1,0 +1,45 @@
+{
+  "name": "@membook/spec",
+  "version": "0.1.0",
+  "description": "The Memfile standard — schema, anchor grammar, validator, and deterministic serialization for Membook memories",
+  "license": "MIT",
+  "author": "Stag.ai Ltd",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "generate:examples": "tsx scripts/generate-examples.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getmembook/membook",
+    "directory": "packages/spec"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "yaml": "^2.8.0",
+    "zod": "^4.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4",
+    "tsx": "^4.20.3"
+  }
+}
