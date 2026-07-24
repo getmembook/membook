@@ -1,0 +1,57 @@
+name: CodeQL
+
+# Static analysis, free for public repositories and the baseline expectation
+# for one. It catches a different class of problem from the test suite: tests
+# check what we thought to check, CodeQL looks for shapes known to be dangerous
+# — injection, path traversal, unsafe deserialization — whether or not anyone
+# considered them.
+#
+# Weekly as well as per-change, because the rule set improves over time. Code
+# that was clean last month can be found wanting without a line of it changing,
+# and a scheduled run is the only way to hear about that.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Tuesday early morning: far from a release, and a weekday so an alert is
+    # seen rather than sitting over a weekend.
+    - cron: "17 6 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      # Only what CodeQL needs: reading the code, and writing its findings back
+      # as alerts. Nothing here should be able to push, publish or comment.
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
+        with:
+          languages: javascript-typescript
+          # `security-extended` over the default: this is a small codebase, so
+          # the extra queries cost little, and it is a tool that handles paths
+          # and spawns git — exactly what the additional rules look at.
+          queries: security-extended
+
+      # No build step. The repository is TypeScript run from source, and
+      # CodeQL's javascript-typescript extractor reads it directly; adding a
+      # build would only introduce a way for analysis to fail on something
+      # unrelated to security.
+      - uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
+        with:
+          category: "/language:javascript-typescript"
