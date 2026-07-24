@@ -30,7 +30,9 @@ pnpm build && pnpm typecheck && pnpm test
 
 ```
 packages/spec/    @membook/spec — the Memfile standard. Zero dependencies on the rest.
-packages/core/    @membook/core — engine: store, index, retrieve.
+packages/core/    @membook/core — engine: store, index, retrieve, verify, distill.
+packages/mcp/     @membook/mcp — stdio MCP server wrapping core.
+packages/cli/     membook — the CLI binary wrapping core.
 docs/             concept and design documents
 prompts/          versioned model-facing prompts (reviewed like code)
 .membook/         this repo's own memories — we eat our own dog food
@@ -141,7 +143,7 @@ git config --global commit.gpgsign true
 
 Then register that key on GitHub as a **signing** key. This is a separate list
 from your authentication keys, and skipping it is the usual reason commits show
-as *Unverified* while `git log --show-signature` says the signature is good:
+as _Unverified_ while `git log --show-signature` says the signature is good:
 
 ```bash
 gh auth refresh -h github.com -s admin:ssh_signing_key
