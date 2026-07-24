@@ -66,3 +66,18 @@ committed:
 
 Out of scope: vulnerabilities in the model providers Membook talks to, and
 anything requiring an attacker who already has write access to your repository.
+
+## Known dependency advisories
+
+Both are audited and neither is reachable in how these packages are used. They
+are listed here so nobody has to rediscover that, and so a change in either is
+noticed rather than lost in the noise.
+
+| Advisory | Severity | Status |
+| --- | --- | --- |
+| `@hono/node-server` path traversal, via `@modelcontextprotocol/sdk` | moderate | **Not reachable.** `@membook/mcp` connects over `StdioServerTransport` only; `@hono/node-server` backs the HTTP transports, which are never instantiated. No fix is available upstream — the current SDK release still depends on the affected range. |
+| `esbuild` arbitrary file read, via `tsup` | low | **Not shipped.** Build-time only, and the issue affects esbuild's dev server, which nothing here runs. |
+
+Re-check with `pnpm audit`. If either becomes reachable — an HTTP transport is
+added, or esbuild moves onto the runtime path — it stops being acceptable and
+must be fixed or the dependency dropped.

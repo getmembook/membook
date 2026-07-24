@@ -31,6 +31,18 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: commander
         update-types: ["version-update:semver-major"]
+      # @types/node must track the MINIMUM supported runtime, not the latest.
+      # We declare engines.node >=20; on v26, code using a Node 22+ API would
+      # typecheck and then fail at runtime on Node 20, with CI green. Bump this
+      # only when the support floor moves.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 breaks the build toolchain, not our code: tsup's dts step
+      # (rollup-plugin-dts) reaches into TS internals that changed in 7. REMOVE
+      # this ignore once tsup/rollup-plugin-dts support TypeScript 7 — we do
+      # want the upgrade, we just cannot build under it yet.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore"
       include: scope

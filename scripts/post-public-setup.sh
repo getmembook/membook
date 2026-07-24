@@ -47,6 +47,22 @@ gh api -X PUT "repos/$REPO/branches/main/protection" \
 }
 JSON
 
+echo "==> Require signed commits on main"
+# PREREQUISITE: the signing key must be registered on GitHub as a SIGNING key,
+# which is a different list from authentication keys. Without it, git verifies
+# your commits locally while GitHub reports `unknown_key`, and everything you
+# push shows as Unverified.
+#
+#   gh auth refresh -h github.com -s admin:ssh_signing_key
+#   gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "commit signing"
+#
+# Dependabot is unaffected: GitHub signs the commits it authors, and they
+# already verify. A squash merge is likewise signed by GitHub, so the practical
+# effect is to close the direct-push path onto main — which is the point.
+gh api -X POST "repos/$REPO/branches/main/protection/required_signatures" >/dev/null
+gh api "repos/$REPO/branches/main/protection/required_signatures" \
+  --jq '"    required_signatures: \(.enabled)"'
+
 echo "==> Private vulnerability reporting (SECURITY.md links to this)"
 gh api -X PUT "repos/$REPO/private-vulnerability-reporting"
 
@@ -63,7 +79,7 @@ JSON
 echo
 echo "==> Verify"
 gh api "repos/$REPO/branches/main/protection" \
-  --jq '{force_push:.allow_force_pushes.enabled, deletions:.allow_deletions.enabled, linear:.required_linear_history.enabled, checks:.required_status_checks.contexts}'
+  --jq '{force_push:.allow_force_pushes.enabled, deletions:.allow_deletions.enabled, linear:.required_linear_history.enabled, signed:.required_signatures.enabled, checks:.required_status_checks.contexts}'
 gh api "repos/$REPO" \
   --jq '{secret_scanning:.security_and_analysis.secret_scanning.status, push_protection:.security_and_analysis.secret_scanning_push_protection.status}'
 
