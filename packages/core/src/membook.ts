@@ -1,9 +1,19 @@
 import type { MemoryInput } from "@membook/spec";
 import { repoPaths, type RepoPaths } from "./paths.js";
-import { MemoryStore, type StoredMemory, type MemoryStoreOptions } from "./store.js";
+import {
+  MemoryStore,
+  type StoredMemory,
+  type MemoryStoreOptions,
+} from "./store.js";
 import { openIndex, type IndexDb } from "./index-db.js";
-import { indexMemory, removeFromIndex, reindex, type ReindexResult } from "./reindex.js";
+import {
+  indexMemory,
+  removeFromIndex,
+  reindex,
+  type ReindexResult,
+} from "./reindex.js";
 import { search, type SearchHit, type SearchOptions } from "./search.js";
+import { verifyPass, type VerifyOptions, type VerifyReport } from "./verify.js";
 import type { QuarantineRecord } from "./errors.js";
 
 export interface MembookOptions extends MemoryStoreOptions {}
@@ -44,7 +54,10 @@ export class Membook {
    * The reverse order would be genuinely unsafe: an indexed memory with no
    * file is a phantom that `reindex` cannot heal, only forget.
    */
-  async remember(frontmatter: MemoryInput, body: string): Promise<StoredMemory> {
+  async remember(
+    frontmatter: MemoryInput,
+    body: string
+  ): Promise<StoredMemory> {
     const stored = await this.store.write(frontmatter, body);
 
     const db = this.open();
@@ -55,10 +68,13 @@ export class Membook {
       if (existing) removeFromIndex(db, stored.id);
       const nextRowid =
         existing?.rowid ??
-        ((db.prepare("SELECT COALESCE(MAX(rowid), 0) AS max FROM memories").get() as {
-          max: number;
-        }).max +
-          1);
+        (
+          db
+            .prepare("SELECT COALESCE(MAX(rowid), 0) AS max FROM memories")
+            .get() as {
+            max: number;
+          }
+        ).max + 1;
       indexMemory(db, stored, nextRowid);
     } finally {
       db.close();
@@ -77,7 +93,10 @@ export class Membook {
     }
   }
 
-  async recall(query: string, options: SearchOptions = {}): Promise<SearchHit[]> {
+  async recall(
+    query: string,
+    options: SearchOptions = {}
+  ): Promise<SearchHit[]> {
     const db = this.open();
     try {
       return search(db, query, options);
@@ -89,6 +108,19 @@ export class Membook {
   /** Rebuild the index from the files. */
   async reindex(): Promise<ReindexResult> {
     return reindex(this.paths, this.store);
+  }
+
+  /**
+   * Diff every anchor against HEAD and update memory statuses.
+   *
+   * Reindexes afterwards when anything changed: the pass writes through the
+   * store, which is file-only by design, so the index would otherwise keep
+   * serving the statuses that a status-filtered `recall` depends on.
+   */
+  async verify(options: VerifyOptions = {}): Promise<VerifyReport> {
+    const report = await verifyPass(this.paths.root, this.store, options);
+    if (!report.dryRun && report.changed.length > 0) await this.reindex();
+    return report;
   }
 
   async status(): Promise<StatusReport> {

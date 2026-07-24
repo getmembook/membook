@@ -31,7 +31,8 @@
   },
   "dependencies": {
     "@membook/spec": "workspace:*",
-    "better-sqlite3": "^11.10.0"
+    "better-sqlite3": "^11.10.0",
+    "execa": "^10.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

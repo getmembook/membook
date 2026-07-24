@@ -1,5 +1,10 @@
 export { Membook, type MembookOptions, type StatusReport } from "./membook.js";
-export { MemoryStore, type StoredMemory, type ReadAllResult, type MemoryStoreOptions } from "./store.js";
+export {
+  MemoryStore,
+  type StoredMemory,
+  type ReadAllResult,
+  type MemoryStoreOptions,
+} from "./store.js";
 export { repoPaths, type RepoPaths } from "./paths.js";
 export {
   NoopWriteGuard,
@@ -29,4 +34,38 @@ export {
   removeFromIndex,
   type ReindexResult,
 } from "./reindex.js";
-export { search, toMatchQuery, type SearchHit, type SearchOptions } from "./search.js";
+export {
+  search,
+  toMatchQuery,
+  type SearchHit,
+  type SearchOptions,
+} from "./search.js";
+export {
+  verifyPass,
+  type VerifyOptions,
+  type VerifyReport,
+  type MemoryVerdict,
+  type AnchorOutcome,
+  type AnchorOutcomeKind,
+} from "./verify.js";
+export {
+  ConservativeRechecker,
+  type AnchorRechecker,
+  type RecheckRequest,
+  type RecheckResult,
+  type RecheckVerdict,
+  type TouchedAnchor,
+} from "./recheck.js";
+export {
+  isGitRepository,
+  headSha,
+  commitExists,
+  changesSince,
+  followRename,
+  pathExistsAt,
+  showFile,
+  GitError,
+  NotAGitRepositoryError,
+  type ChangeKind,
+  type PathChange,
+} from "./git.js";
