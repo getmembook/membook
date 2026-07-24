@@ -3,6 +3,7 @@
 **Memory that stays true.** A verifiable memory engine for coding agents.
 
 [![CI](https://github.com/getmembook/membook/actions/workflows/ci.yml/badge.svg)](https://github.com/getmembook/membook/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/membook/alpha?label=npm%40alpha)](https://www.npmjs.com/package/membook)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](./package.json)
 
@@ -14,10 +15,11 @@ symbol — so when the code changes, the memory knows. Storage is plain markdown
 committed to your repo: it renders on GitHub, diffs in pull requests, and
 survives review like any other artifact.
 
-> **Status: pre-release, under active development.** The format and the engine
-> are built and tested; the MCP server, verify pass, and CLI are not yet. See
-> [Status](#status) for exactly what works today. Expect breaking changes
-> before v0.1.
+> **Pre-release.** Everything below is built and tested, but the release gate
+> has not been met: Membook has not yet been lived with on a real project for
+> long enough to know whether it helps. The npm badge above is the current
+> answer to "can I install this" — no `latest` tag means no release yet.
+> Expect breaking changes.
 
 ## Why it's different
 
@@ -95,17 +97,21 @@ wrote a memory, from what, and in what context, purely from which fields exist.
 | [`membook`](./packages/cli)        | CLI (`init`, `status`, `review`, `verify`, `remember`, `book`) | **Built**, 25 tests  |
 | Distillation                       | Session digest → candidate memories                            | Not started          |
 
-Nothing is published to npm yet.
+Distillation is deliberately out of scope for v0.1 — the memories an agent
+records through `remember` are the ones that matter first.
 
 ## Platform support
 
-**macOS and Linux for v0.1.** Windows is built in CI but not gated on, and it
-currently does not work: `better-sqlite3` has no prebuilt binary for recent
-Node on Windows and fails to compile on a clean machine, so `membook init`
-will not get off the ground there.
+**macOS and Linux for v0.1.** Windows is built in CI but not gated on.
 
-Stated plainly because a known limitation beats an implied capability that
-fails at the first command. Windows support is a v0.2 question.
+Windows installs and runs: `@membook/spec` passes its full suite there, and
+the rest is close. What fails is temp-directory cleanup — SQLite holds a file
+handle open, and Windows refuses to unlink a file that is open, so a handful
+of tests error on teardown rather than on anything they were testing.
+
+That is a smaller and more tractable problem than it used to be — until
+recently `better-sqlite3` could not compile there at all — but "close" is not
+"supported", so v0.1 does not claim it. Windows is a v0.2 question.
 
 ## Development
 
