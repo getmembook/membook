@@ -14,8 +14,8 @@ echo "==> Branch protection on main"
 # escape the 10x private-repo minute multiplier. Requiring it would have made
 # every pull request unmergeable, waiting on a check that is never reported.
 #
-# If this repo is public by the time you run this, Actions are free and macOS
-# should go back onto pull requests in ci.yml — and then back into this list.
+# The repo is public, so Actions are free and macOS is back on pull requests
+# in ci.yml — and therefore back in this list.
 #
 # Windows is deliberately NOT required: it is advisory and currently fails,
 # because better-sqlite3 has no prebuilt for recent Node on Windows.
@@ -32,6 +32,8 @@ gh api -X PUT "repos/$REPO/branches/main/protection" \
     "contexts": [
       "test (ubuntu-latest, node 20)",
       "test (ubuntu-latest, node 24)",
+      "test (macos-latest, node 20)",
+      "test (macos-latest, node 24)",
       "packaged install"
     ]
   },

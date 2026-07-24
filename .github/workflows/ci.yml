@@ -12,23 +12,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # MINUTES ARE METERED WHILE THIS REPO IS PRIVATE, AND macOS COSTS 10x.
+  # Public repos get unlimited Actions minutes, so the full matrix runs on
+  # every pull request again.
   #
-  # Private repos bill Linux at 1x, Windows at 2x and macOS at 10x. Two macOS
-  # jobs on every pull-request update came to roughly 1,700 minutes a week on
-  # their own — effectively the whole allowance, spent on a multiplier rather
-  # than on coverage. A PR gets pushed to many times; main is merged to rarely.
-  #
-  # Going public makes all of this free and both jobs below collapse back into
-  # one matrix.
+  # It was briefly split: while this repo was private, macOS billed at 10x and
+  # two macOS jobs per PR update came to roughly 1,700 minutes a week against a
+  # 2,000-minute allowance — the whole thing, spent on a multiplier rather than
+  # on coverage. Going public removed the constraint rather than the need, so
+  # the split is gone and platform divergence is caught before merge again.
   test:
-    name: test (ubuntu-latest, node ${{ matrix.node }})
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest]
         # 20 is the floor declared in `engines`; 24 is what the repo pins.
         node: [20, 24]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       # No `version:` here on purpose. pnpm/action-setup errors out when the
@@ -45,33 +45,6 @@ jobs:
       # it is the check that a fresh clone works.
       - run: pnpm test
 
-      - run: pnpm build
-      - run: pnpm typecheck
-
-  # macOS on merges to main only — see the note above.
-  #
-  # The trade is honest: a macOS-only failure is caught after merge instead of
-  # before. It is small here because development happens on a Mac, so the
-  # author's own `pnpm test` is already a macOS run on every change; CI was
-  # paying a 10x multiplier to repeat a check that had just happened locally.
-  # If development ever moves off macOS, this needs revisiting.
-  macos:
-    name: test (macos-latest, node ${{ matrix.node }})
-    if: github.ref == 'refs/heads/main'
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [20, 24]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: ${{ matrix.node }}
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test
       - run: pnpm build
       - run: pnpm typecheck
 
