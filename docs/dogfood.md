@@ -33,6 +33,52 @@ gitignored. Paste the relevant lines into an entry rather than committing it.
 
 ## Entries
 
+### 2026-07-24 — the intervention failed, and it is the finding that matters
+
+**What happened.** Fixed the write-trigger problem three ways — `remember`'s
+description now says _when_ to call it, `session_digest` gained triggers at
+both ends of a session, and `init` writes a marked pointer into `CLAUDE.md`.
+Then ran a real task in `backend-repo` with all of it live.
+
+**What the tool did.** Nothing. Zero tool calls. The telemetry directory was
+never created.
+
+This was not a misconfiguration. Verified at the time: the MCP server reported
+`✔ Connected`; a fresh connection was confirmed to receive the new
+`as soon as you work out something` trigger; the pointer was present in
+`CLAUDE.md`. The agent had the tools, the instruction, and the trigger, and
+reached for none of them.
+
+**The finding.** **Making a tool available is not the same as getting it
+used.** A tool description is passive — it is read once the model is already
+deciding to call something. Nothing in an ordinary session creates a moment
+where _not_ using Membook costs anything, so nothing happens. Writing better
+prose is not the lever, and we should stop reaching for it.
+
+Two harder points fall out of this.
+
+The **zero-integration assumption is wrong** in a way that matters. `MEMBOOK.md`
+at the repo root was designed so agents _without_ Membook still benefit. But an
+agent _with_ Membook fully installed did not use it either, so the problem is
+not distribution — it is that nothing pulls.
+
+And it **undercuts the thesis from the write side**. Verification is the moat,
+but verification only operates on memories that exist. A perfect verification
+loop over an empty book is worth nothing, and today's evidence is that books
+stay empty by default.
+
+**What annoyed me.** That the earlier session, before any of this work, _did_
+call `recall` once. So the intervention did not obviously help and may have
+been aimed at the wrong thing entirely.
+
+**Next, and it is a change in kind rather than degree.** Stop persuading the
+model and give the harness a forcing function: hooks. `SessionStart` injects
+the book so knowledge arrives without being chosen; `UserPromptSubmit` can
+inject relevant recall so retrieval needs no decision at all; `Stop` asks what
+was learned. The cost is honest — hooks are Claude Code-specific, so this is
+no longer zero-integration and does not port to Cursor or Codex. That tension
+needs a ruling before it is built.
+
 ### 2026-07-24 — first outside repo: recall fired, remember never did
 
 **What happened.** Set Membook up across nine real repos in the client workspace
