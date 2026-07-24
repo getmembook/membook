@@ -77,3 +77,7 @@ Passive transcript capture; org graph / server / sync / RBAC; non-git verifiers 
 - Closest architectural twin: EverMind EverOS (markdown-first + SQLite + hybrid retrieval). Our storage is sound but NOT novel — the verification loop is the only moat. Never cut scope from verification to polish storage.
 - Closest coding-memory competitor: ByteRover Cipher (Elastic 2.0, team cloud sync, no verification). Native platform memory (Claude Code auto-memory default-on, Codex Memories) absorbs single-user value — v0.1 exists to prove the loop and seed the standard, not to win single-user.
 - Economics (research-corrected): break-even reuse probability for writing a memory ≈ 3–6% — write generously, but retrieval precision is the binding constraint (a wrong retrieval risks a poisoned loop, ~7× per-step error inflation per published research). Hence aggressive distillation rejection.
+
+<!-- membook -->
+Project memory lives in `MEMBOOK.md` and the `membook` MCP tools. Recall before
+assuming how a subsystem works; remember what you had to work out.
