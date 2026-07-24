@@ -210,10 +210,10 @@ describe("file-first write ordering", () => {
     const before = await membook.status();
     expect(before.onDisk).toBe(CORPUS.length + 1);
     expect(before.indexed).toBe(CORPUS.length);
-    expect(await membook.recall("orphaned crash")).toHaveLength(0);
+    expect(await membook.search("orphaned crash")).toHaveLength(0);
 
     await membook.reindex();
-    expect(await membook.recall("orphaned crash")).toHaveLength(1);
+    expect(await membook.search("orphaned crash")).toHaveLength(1);
   });
 
   it("forget removes the file and the index row together", async () => {

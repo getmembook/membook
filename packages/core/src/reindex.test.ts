@@ -41,7 +41,7 @@ describe("GATE: delete DB → reindex → identical retrieval", () => {
     const membook = await seeded(root);
 
     const before = [];
-    for (const query of QUERIES) before.push(await membook.recall(query));
+    for (const query of QUERIES) before.push(await membook.search(query));
 
     await rm(membook.paths.indexFile, { force: true });
     const result = await membook.reindex();
@@ -49,7 +49,7 @@ describe("GATE: delete DB → reindex → identical retrieval", () => {
     expect(result.quarantined).toHaveLength(0);
 
     const after = [];
-    for (const query of QUERIES) after.push(await membook.recall(query));
+    for (const query of QUERIES) after.push(await membook.search(query));
 
     expect(after).toEqual(before);
   });
@@ -57,9 +57,9 @@ describe("GATE: delete DB → reindex → identical retrieval", () => {
   it("is stable across repeated rebuilds", async () => {
     const membook = await seeded(root);
     await membook.reindex();
-    const first = await membook.recall("sqlite index");
+    const first = await membook.search("sqlite index");
     await membook.reindex();
-    const second = await membook.recall("sqlite index");
+    const second = await membook.search("sqlite index");
     expect(second).toEqual(first);
   });
 
@@ -75,7 +75,7 @@ describe("GATE: delete DB → reindex → identical retrieval", () => {
   it("does not depend on the order files were written", async () => {
     const membook = await seeded(root);
     await membook.reindex();
-    const expected = await membook.recall("sqlite index cache");
+    const expected = await membook.search("sqlite index cache");
 
     // Rebuild from the same files in a fresh repo, written in reverse order.
     const other = await tempRepo();
@@ -91,7 +91,7 @@ describe("GATE: delete DB → reindex → identical retrieval", () => {
         );
       }
       await second.reindex();
-      expect(await second.recall("sqlite index cache")).toEqual(expected);
+      expect(await second.search("sqlite index cache")).toEqual(expected);
     } finally {
       await other.cleanup();
     }
@@ -201,6 +201,6 @@ describe("pinned index metadata", () => {
 
     expect(() => openIndex(membook.paths.indexFile)).toThrow(IndexMetadataMismatchError);
     await expect(membook.reindex()).resolves.toMatchObject({ indexed: CORPUS.length });
-    await expect(membook.recall("sqlite")).resolves.not.toHaveLength(0);
+    await expect(membook.search("sqlite")).resolves.not.toHaveLength(0);
   });
 });

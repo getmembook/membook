@@ -14,7 +14,7 @@ import type { MemoryInput } from "./schema.js";
 const EXAMPLES_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
-  "examples",
+  "examples"
 );
 
 const COMMIT = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
@@ -48,10 +48,12 @@ describe("golden examples", () => {
 
   it("ships at least one example per memory type", () => {
     const types = files.map(
-      (f) => parseMemfile(readFileSync(join(EXAMPLES_DIR, f), "utf8"), f).frontmatter.type,
+      (f) =>
+        parseMemfile(readFileSync(join(EXAMPLES_DIR, f), "utf8"), f).frontmatter
+          .type
     );
     expect(new Set(types)).toEqual(
-      new Set(["decision", "gotcha", "convention", "map", "deadend"]),
+      new Set(["decision", "gotcha", "convention", "map", "deadend"])
     );
   });
 
@@ -59,21 +61,21 @@ describe("golden examples", () => {
     const shapes = files.map((f) => {
       const { provenance } = parseMemfile(
         readFileSync(join(EXAMPLES_DIR, f), "utf8"),
-        f,
+        f
       ).frontmatter;
       return provenance.origin === "distilled"
         ? "distilled"
         : `authored:${provenance.author}`;
     });
     expect(new Set(shapes)).toEqual(
-      new Set(["distilled", "authored:agent", "authored:human"]),
+      new Set(["distilled", "authored:agent", "authored:human"])
     );
   });
 
   it.each(files)("%s filename matches its id", (file) => {
     const { frontmatter } = parseMemfile(
       readFileSync(join(EXAMPLES_DIR, file), "utf8"),
-      file,
+      file
     );
     expect(file).toBe(`${frontmatter.id}.mem.md`);
   });
@@ -93,7 +95,9 @@ describe("INVARIANT: byte-exact round-trip", () => {
 
   it.each(files)("serialize(parse(%s)) is byte-identical", (file) => {
     const source = readFileSync(join(EXAMPLES_DIR, file), "utf8");
-    expect(serializeMemfileRecord(parseMemfile(source, file), file)).toBe(source);
+    expect(serializeMemfileRecord(parseMemfile(source, file), file)).toBe(
+      source
+    );
   });
 
   it.each(files)("parse(serialize(parse(%s))) is unchanged", (file) => {
@@ -105,9 +109,9 @@ describe("INVARIANT: byte-exact round-trip", () => {
 
   it("holds for a memory built in memory, not just for files on disk", () => {
     const text = serializeMemfile(validMemory(), "A statement.");
-    expect(serializeMemfileRecord(parseMemfile(text), text ? undefined : "")).toBe(
-      text,
-    );
+    expect(
+      serializeMemfileRecord(parseMemfile(text), text ? undefined : "")
+    ).toBe(text);
   });
 });
 
@@ -128,7 +132,7 @@ describe("serialization determinism", () => {
         id: "m-4f2a",
         memfile: 1,
       },
-      body,
+      body
     );
     expect(shuffled).toBe(forward);
     expect(forward.indexOf("memfile:")).toBeLessThan(forward.indexOf("id:"));
@@ -142,9 +146,11 @@ describe("serialization determinism", () => {
   it("emits line ranges in flow style", () => {
     const text = serializeMemfile(
       validMemory({
-        anchors: [{ path: "src/auth.ts", line_range: [42, 60], commit: COMMIT }],
+        anchors: [
+          { path: "src/auth.ts", line_range: [42, 60], commit: COMMIT },
+        ],
       }),
-      "A statement.",
+      "A statement."
     );
     expect(text).toContain("line_range: [42, 60]");
   });
@@ -157,7 +163,7 @@ describe("serialization determinism", () => {
           { path: "src/db.ts", commit: COMMIT },
         ],
       }),
-      "A statement.",
+      "A statement."
     );
     for (const anchor of text.matchAll(/^ {2}- (\w+):/gm)) {
       expect(anchor[1]).toBe("kind");
@@ -180,11 +186,11 @@ describe("serialization determinism", () => {
     // The same instant, written in Kochi, must serialize identically.
     const kochi = serializeMemfile(
       validMemory({ created: "2026-07-21T22:12:00+05:30" }),
-      "A statement.",
+      "A statement."
     );
     const london = serializeMemfile(
       validMemory({ created: "2026-07-21T16:42:00Z" }),
-      "A statement.",
+      "A statement."
     );
     expect(kochi).toBe(london);
     expect(kochi).toContain('created: "2026-07-21T16:42:00Z"');
@@ -193,7 +199,7 @@ describe("serialization determinism", () => {
   it("truncates sub-second precision to canonical second precision", () => {
     const text = serializeMemfile(
       validMemory({ created: "2026-07-21T16:42:00.987Z" }),
-      "A statement.",
+      "A statement."
     );
     expect(text).toContain('created: "2026-07-21T16:42:00Z"');
   });
@@ -207,14 +213,17 @@ describe("serialization determinism", () => {
 describe("loud failure", () => {
   it("rejects a body-less memory on write", () => {
     expect(() => serializeMemfile(validMemory(), "   ")).toThrow(
-      MemfileValidationError,
+      MemfileValidationError
     );
   });
 
   it("rejects a Date timestamp on write, keeping the tolerance one-directional", () => {
-    const withDate = { ...validMemory(), created: new Date() } as unknown as MemoryInput;
+    const withDate = {
+      ...validMemory(),
+      created: new Date(),
+    } as unknown as MemoryInput;
     expect(() => serializeMemfile(withDate, "A statement.")).toThrow(
-      MemfileValidationError,
+      MemfileValidationError
     );
   });
 
@@ -233,8 +242,8 @@ describe("loud failure", () => {
             source_hash: SOURCE_HASH,
           } as never,
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(MemfileValidationError);
   });
 
@@ -249,8 +258,8 @@ describe("loud failure", () => {
             model: "claude-opus-4-8",
           } as never,
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(MemfileValidationError);
   });
 
@@ -265,8 +274,8 @@ describe("loud failure", () => {
             source_hash: SOURCE_HASH,
           } as never,
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(MemfileValidationError);
   });
 
@@ -282,22 +291,29 @@ describe("loud failure", () => {
             model: "claude-opus-4-8",
           },
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).not.toThrow();
   });
 
   // A person at a CLI has no model. The schema makes inventing one
   // impossible, rather than leaving a field they are tempted to fill.
   it("rejects human-authored provenance carrying an agent or model", () => {
-    for (const rogue of [{ agent: "claude-code" }, { model: "claude-opus-4-8" }]) {
+    for (const rogue of [
+      { agent: "claude-code" },
+      { model: "claude-opus-4-8" },
+    ]) {
       expect(() =>
         serializeMemfile(
           validMemory({
-            provenance: { origin: "authored", author: "human", ...rogue } as never,
+            provenance: {
+              origin: "authored",
+              author: "human",
+              ...rogue,
+            } as never,
           }),
-          "A statement.",
-        ),
+          "A statement."
+        )
       ).toThrow(MemfileValidationError);
     }
   });
@@ -306,8 +322,8 @@ describe("loud failure", () => {
     expect(() =>
       serializeMemfile(
         validMemory({ provenance: { origin: "authored", author: "human" } }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).not.toThrow();
   });
 
@@ -315,10 +331,14 @@ describe("loud failure", () => {
     expect(() =>
       serializeMemfile(
         validMemory({
-          provenance: { origin: "authored", author: "human", session: "sess-1" },
+          provenance: {
+            origin: "authored",
+            author: "human",
+            session: "sess-1",
+          },
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).not.toThrow();
   });
 
@@ -328,8 +348,8 @@ describe("loud failure", () => {
         validMemory({
           provenance: { origin: "authored", author: "agent" } as never,
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(MemfileValidationError);
   });
 
@@ -343,8 +363,8 @@ describe("loud failure", () => {
             model: "claude-opus-4-8",
           } as never,
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(MemfileValidationError);
   });
 
@@ -361,8 +381,8 @@ describe("loud failure", () => {
             source_hash: SOURCE_HASH,
           } as never,
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(MemfileValidationError);
   });
 
@@ -377,42 +397,59 @@ describe("loud failure", () => {
             source_hash: SOURCE_HASH,
           } as never,
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(MemfileValidationError);
   });
 
   it("rejects an anchorless memory on write", () => {
-    expect(() => serializeMemfile(validMemory({ anchors: [] }), "A statement.")).toThrow(
-      /at least one anchor/,
-    );
+    expect(() =>
+      serializeMemfile(validMemory({ anchors: [] }), "A statement.")
+    ).toThrow(/at least one anchor/);
   });
 
   it("rejects unknown frontmatter fields", () => {
     const memory = { ...validMemory(), rogue: "field" } as MemoryInput;
     expect(() => serializeMemfile(memory, "A statement.")).toThrow(
-      MemfileValidationError,
+      MemfileValidationError
     );
   });
 
-  it("rejects a non-unverified memory with no verified timestamp", () => {
+  it("rejects a verified memory with no verified timestamp", () => {
     const { verified: _omitted, ...rest } = validMemory();
     expect(() => serializeMemfile(rest as MemoryInput, "A statement.")).toThrow(
-      /must carry a verified timestamp/,
+      /must carry a verified timestamp/
     );
   });
 
+  // A memory created `unverified` whose anchored code then changes becomes
+  // stale having never been verified. Demanding a timestamp there would force
+  // one to be invented.
+  it.each(["stale", "invalidated"] as const)(
+    "accepts a %s memory that was never verified",
+    (status) => {
+      const { verified: _omitted, ...rest } = validMemory({ status });
+      expect(() =>
+        serializeMemfile(rest as MemoryInput, "A statement.")
+      ).not.toThrow();
+    }
+  );
+
   it("accepts an unverified memory with no verified timestamp", () => {
-    const { verified: _omitted, ...rest } = validMemory({ status: "unverified" });
-    expect(() => serializeMemfile(rest as MemoryInput, "A statement.")).not.toThrow();
+    const { verified: _omitted, ...rest } = validMemory({
+      status: "unverified",
+    });
+    expect(() =>
+      serializeMemfile(rest as MemoryInput, "A statement.")
+    ).not.toThrow();
   });
 
   it("rejects an absolute anchor path", () => {
     expect(() =>
       serializeMemfile(
         validMemory({ anchors: [{ path: "/etc/passwd", commit: COMMIT }] }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(/repo-relative/);
   });
 
@@ -420,8 +457,8 @@ describe("loud failure", () => {
     expect(() =>
       serializeMemfile(
         validMemory({ anchors: [{ path: "../secrets.ts", commit: COMMIT }] }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(/\.\. segments|must not contain/);
   });
 
@@ -429,8 +466,8 @@ describe("loud failure", () => {
     expect(() =>
       serializeMemfile(
         validMemory({ anchors: [{ path: "src/auth.ts", commit: "9f1c2d3" }] }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(/40-char/);
   });
 
@@ -438,10 +475,12 @@ describe("loud failure", () => {
     expect(() =>
       serializeMemfile(
         validMemory({
-          anchors: [{ path: "src/auth.ts", line_range: [60, 42], commit: COMMIT }],
+          anchors: [
+            { path: "src/auth.ts", line_range: [60, 42], commit: COMMIT },
+          ],
         }),
-        "A statement.",
-      ),
+        "A statement."
+      )
     ).toThrow(/start must be <= end/);
   });
 
@@ -450,7 +489,7 @@ describe("loud failure", () => {
       serializeMemfile(
         validMemory({ confidence: 5, type: "nonsense" as never }),
         "A statement.",
-        "m-4f2a.mem.md",
+        "m-4f2a.mem.md"
       );
       expect.unreachable("should have thrown");
     } catch (error) {
@@ -465,13 +504,13 @@ describe("loud failure", () => {
 describe("parsing", () => {
   it("rejects a file with no frontmatter", () => {
     expect(() => parseMemfile("Just a body.", "x.mem.md")).toThrow(
-      /missing.*frontmatter/i,
+      /missing.*frontmatter/i
     );
   });
 
   it("rejects unparseable YAML", () => {
     expect(() => parseMemfile("---\n  : : :\n---\nBody.", "x.mem.md")).toThrow(
-      MemfileValidationError,
+      MemfileValidationError
     );
   });
 
@@ -479,7 +518,7 @@ describe("parsing", () => {
     const text = serializeMemfile(validMemory(), "A statement.");
     const stripped = text.replace("A statement.", "   ");
     expect(() => parseMemfile(stripped, "x.mem.md")).toThrow(
-      /human-readable statement/,
+      /human-readable statement/
     );
   });
 
@@ -496,12 +535,14 @@ describe("parsing", () => {
     const text = serializeMemfile(validMemory(), "A statement.");
     const unquoted = text.replace(
       'created: "2026-07-21T16:42:00Z"',
-      "created: 2026-07-21T16:42:00Z",
+      "created: 2026-07-21T16:42:00Z"
     );
     const { frontmatter } = parseMemfile(unquoted, "x.mem.md");
     expect(frontmatter.created).toBe("2026-07-21T16:42:00Z");
     // ...and re-serializing restores the canonical quoted form.
-    expect(serializeMemfileRecord({ frontmatter, body: "A statement." })).toBe(text);
+    expect(serializeMemfileRecord({ frontmatter, body: "A statement." })).toBe(
+      text
+    );
   });
 
   it("safeParse succeeds on a valid memfile", () => {

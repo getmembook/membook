@@ -14,6 +14,7 @@ import {
 } from "./reindex.js";
 import { search, type SearchHit, type SearchOptions } from "./search.js";
 import { verifyPass, type VerifyOptions, type VerifyReport } from "./verify.js";
+import { recall, type RecallOptions, type RecallResult } from "./recall.js";
 import type { QuarantineRecord } from "./errors.js";
 
 export interface MembookOptions extends MemoryStoreOptions {}
@@ -93,13 +94,33 @@ export class Membook {
     }
   }
 
-  async recall(
+  /** Raw index query: BM25 relevance only, no re-ranking and no floor. */
+  async search(
     query: string,
     options: SearchOptions = {}
   ): Promise<SearchHit[]> {
     const db = this.open();
     try {
       return search(db, query, options);
+    } finally {
+      db.close();
+    }
+  }
+
+  /**
+   * What an agent actually receives: hybrid-ranked, floored, and capped.
+   *
+   * Deliberately distinct from `search`. A raw index query is fine for a
+   * human at a CLI who can discard a bad row; an agent cannot, and a weak
+   * match in its context is worse than no match at all.
+   */
+  async recall(
+    query: string,
+    options: RecallOptions = {}
+  ): Promise<RecallResult> {
+    const db = this.open();
+    try {
+      return recall(db, query, options);
     } finally {
       db.close();
     }

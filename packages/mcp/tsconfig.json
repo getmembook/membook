@@ -8,7 +8,8 @@
     // Resolve workspace siblings to source, so `pnpm typecheck` works on a
     // fresh clone rather than only after a build has produced their .d.ts.
     "paths": {
-      "@membook/spec": ["../spec/src/index.ts"]
+      "@membook/spec": ["../spec/src/index.ts"],
+      "@membook/core": ["../core/src/index.ts"]
     }
   },
   "include": ["src"]

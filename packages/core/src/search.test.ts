@@ -45,7 +45,7 @@ describe("search", () => {
     // Note this searches the STATEMENT: anchor paths live in the anchors
     // table and become a retrieval signal with hybrid ranking, not here.
     const membook = await seeded(root);
-    const hits = await membook.recall(".membook/index");
+    const hits = await membook.search(".membook/index");
     expect(hits.length).toBeGreaterThan(0);
   });
 
@@ -58,35 +58,35 @@ describe("search", () => {
       "^caret NEAR/2 tilde~",
       '"unbalanced',
     ]) {
-      await expect(membook.recall(query)).resolves.toBeDefined();
+      await expect(membook.search(query)).resolves.toBeDefined();
     }
   });
 
   it("finds identifiers with underscores, and their parts", async () => {
     const membook = await seeded(root);
-    expect(await membook.recall("journal_mode")).not.toHaveLength(0);
+    expect(await membook.search("journal_mode")).not.toHaveLength(0);
     // The pinned tokenizer keeps `_` a separator, so a bare part matches too.
-    expect(await membook.recall("journal")).not.toHaveLength(0);
+    expect(await membook.search("journal")).not.toHaveLength(0);
   });
 
   it("returns an empty result for an empty query rather than everything", async () => {
     const membook = await seeded(root);
-    expect(await membook.recall("   ")).toEqual([]);
+    expect(await membook.search("   ")).toEqual([]);
   });
 
   it("ranks deterministically across repeated calls", async () => {
     const membook = await seeded(root);
-    const a = await membook.recall("index");
-    const b = await membook.recall("index");
+    const a = await membook.search("index");
+    const b = await membook.search("index");
     expect(b).toEqual(a);
   });
 
   it("filters by status, so stale memories can be withheld", async () => {
     const membook = await seeded(root);
-    const all = await membook.recall("rename detection");
+    const all = await membook.search("rename detection");
     expect(all.some((h) => h.status === "stale")).toBe(true);
 
-    const fresh = await membook.recall("rename detection", {
+    const fresh = await membook.search("rename detection", {
       statuses: ["verified", "unverified"],
     });
     expect(fresh.some((h) => h.status === "stale")).toBe(false);
@@ -94,12 +94,12 @@ describe("search", () => {
 
   it("honours the limit", async () => {
     const membook = await seeded(root);
-    expect((await membook.recall("index", { limit: 1 })).length).toBeLessThanOrEqual(1);
+    expect((await membook.search("index", { limit: 1 })).length).toBeLessThanOrEqual(1);
   });
 
   it("returns results in descending score order", async () => {
     const membook = await seeded(root);
-    const hits = await membook.recall("for rename detection");
+    const hits = await membook.search("for rename detection");
     expect(hits.length).toBeGreaterThan(1);
     for (let i = 1; i < hits.length; i++) {
       expect(hits[i - 1]!.score).toBeGreaterThanOrEqual(hits[i]!.score);
@@ -110,24 +110,24 @@ describe("search", () => {
     const membook = await seeded(root);
     // Only the deadend carries "rename" and "detection"; another statement
     // shares just "for", so term overlap alone decides the order.
-    const hits = await membook.recall("for rename detection");
+    const hits = await membook.search("for rename detection");
     expect(hits[0]!.type).toBe("deadend");
   });
 
   it("any mode ranks partial matches instead of returning nothing", async () => {
     const membook = await seeded(root);
     // No single statement carries all of these; `all` would return nothing.
-    const hits = await membook.recall("rename quarantining anchors");
+    const hits = await membook.search("rename quarantining anchors");
     expect(hits.length).toBeGreaterThan(1);
-    expect(await membook.recall("rename quarantining anchors", { mode: "all" })).toEqual(
+    expect(await membook.search("rename quarantining anchors", { mode: "all" })).toEqual(
       [],
     );
   });
 
   it("all mode narrows to memories carrying every term", async () => {
     const membook = await seeded(root);
-    const any = await membook.recall("for rename");
-    const all = await membook.recall("for rename", { mode: "all" });
+    const any = await membook.search("for rename");
+    const all = await membook.search("for rename", { mode: "all" });
     expect(all.length).toBeLessThan(any.length);
     expect(all).toHaveLength(1);
   });

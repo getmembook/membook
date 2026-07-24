@@ -214,19 +214,31 @@ const memoryObject = z
     confidence: z.number().min(0).max(1),
     created: isoTimestampString,
     verified: isoTimestampString.optional(),
-    anchors: z.array(anchorSchema).min(1, "a memory must carry at least one anchor"),
+    anchors: z
+      .array(anchorSchema)
+      .min(1, "a memory must carry at least one anchor"),
     provenance: provenanceSchema,
     supersedes: memoryIdSchema.optional(),
   })
   .strict();
 
+/**
+ * `verified` records when the memory last passed verification, so it exists
+ * if and only if that ever happened — presence is meaningful here too.
+ *
+ * Required for `verified`, and forbidden for nothing: a memory created
+ * `unverified` whose anchored code then changes becomes `stale` having never
+ * been verified at all, and must be representable. Demanding a timestamp
+ * there would force one to be invented, which is the failure this format
+ * exists to prevent.
+ */
 const requireVerifiedTimestamp = (m: {
   status: string;
   verified?: string | undefined;
-}) => m.status === "unverified" || m.verified !== undefined;
+}) => m.status !== "verified" || m.verified !== undefined;
 
 const verifiedTimestampIssue = {
-  error: "a memory that is not unverified must carry a verified timestamp",
+  error: "a memory with status `verified` must carry a verified timestamp",
   path: ["verified"],
 };
 
@@ -242,7 +254,7 @@ const verifiedTimestampIssue = {
  */
 export const memoryWireSchema = memoryObject.refine(
   requireVerifiedTimestamp,
-  verifiedTimestampIssue,
+  verifiedTimestampIssue
 );
 
 /**
@@ -266,8 +278,12 @@ export type ProvenanceAuthor = (typeof PROVENANCE_AUTHORS)[number];
 export type Provenance = z.infer<typeof provenanceSchema>;
 export type DistilledProvenance = z.infer<typeof distilledProvenanceSchema>;
 export type AuthoredProvenance = z.infer<typeof authoredProvenanceSchema>;
-export type AgentAuthoredProvenance = z.infer<typeof agentAuthoredProvenanceSchema>;
-export type HumanAuthoredProvenance = z.infer<typeof humanAuthoredProvenanceSchema>;
+export type AgentAuthoredProvenance = z.infer<
+  typeof agentAuthoredProvenanceSchema
+>;
+export type HumanAuthoredProvenance = z.infer<
+  typeof humanAuthoredProvenanceSchema
+>;
 export type Memory = z.infer<typeof memorySchema>;
 
 /**

@@ -41,6 +41,15 @@ export {
   type SearchOptions,
 } from "./search.js";
 export {
+  recall,
+  pathAffinity,
+  RANKING,
+  type RecallOptions,
+  type RecallResult,
+  type RecallHit,
+  type RecallAnchor,
+} from "./recall.js";
+export {
   verifyPass,
   type VerifyOptions,
   type VerifyReport,

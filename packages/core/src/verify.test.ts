@@ -440,11 +440,17 @@ describe("the signature demo", () => {
       .anchors[0]!;
     expect(anchor.path).toBe("src/db/index.ts");
 
-    // And retrieval can now withhold it.
+    // And retrieval withholds it from a caller that wants only verified
+    // memories — while still reporting that something was held back, so the
+    // agent knows the silence is not an absence of knowledge.
     const fresh = await membook.recall("journal_mode WAL deadlock", {
       statuses: ["verified"],
     });
-    expect(fresh).toHaveLength(0);
-    expect(await membook.recall("journal_mode WAL deadlock")).toHaveLength(1);
+    expect(fresh.hits).toHaveLength(0);
+    expect(fresh.withheld.byStatus["stale"]).toBe(1);
+
+    const all = await membook.recall("journal_mode WAL deadlock");
+    expect(all.hits).toHaveLength(1);
+    expect(all.hits[0]!.status).toBe("stale");
   });
 });
