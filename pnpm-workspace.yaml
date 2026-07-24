@@ -1,2 +1,15 @@
 packages:
   - "packages/*"
+
+# A dependency demanding a newer Node than `engines` promises must fail at
+# INSTALL time, not sail through CI.
+#
+# Commander 15 requires node >=22.12 against a declared floor of >=20, and its
+# CI run went green: pnpm does not check engines by default, and the tests
+# happened not to reach a Node-22-only API. A support policy nothing verifies
+# is a comment, not a policy.
+#
+# `engine-strict` in .npmrc only warns under pnpm 11 — verified, it does not
+# fail. This is the setting that does, and it checks dependencies' engines too,
+# not merely the root package's.
+engineStrict: true

@@ -8,9 +8,14 @@ updates:
     # Grouped aggressively: ungrouped, this opened seven PRs on the first run.
     # A two-package repo with 155 tests can review a batch as one change.
     groups:
+      # Majors split out from routine updates. Grouped together, a TypeScript
+      # 7 migration held vitest 4 and @types/node hostage in one all-or-nothing
+      # PR that failed every job — so nothing could land, and each reopening
+      # cost a full matrix. Routine bumps should merge on green; majors should
+      # arrive one at a time and be argued with individually.
       dev-dependencies:
         dependency-type: development
-        update-types: ["major", "minor", "patch"]
+        update-types: ["minor", "patch"]
       production-dependencies:
         dependency-type: production
         update-types: ["minor", "patch"]
@@ -23,6 +28,8 @@ updates:
       - dependency-name: execa
         update-types: ["version-update:semver-major"]
       - dependency-name: better-sqlite3
+        update-types: ["version-update:semver-major"]
+      - dependency-name: commander
         update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore"
