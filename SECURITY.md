@@ -18,26 +18,38 @@ persisted, pushed, and shared with everyone who clones.
 
 Pre-release. Only `main` is supported; nothing is published to npm yet.
 
-## Current state of secret scanning
+## Secret scanning
 
-Membook's design commitment is that **no secret ever reaches a committed memory
-file**, enforced by scanning every distillation output before anything is
-written under `.membook/`.
+Membook's commitment is that **no secret ever reaches a committed memory file**.
+Every write passes through a scanner before anything touches `.membook/`, and a
+match blocks the write entirely — nothing is partially written.
 
-**That scanner is not implemented yet.** It is build step 6 and is
-launch-blocking — v0.1 will not ship without it.
+The scanner is **deny-biased**, because the two failure modes are not
+comparable:
 
-What exists today is the seam it plugs into: every write passes through a
-configured `WriteGuard` before touching disk, and a guard returning findings
-blocks the write entirely. The default is `NoopWriteGuard`, which passes
-everything and is named to be honest about that.
+- A false positive blocks a memory. A human looks at it. Done.
+- A false negative commits a credential, which is then pushed and cloned.
 
-Until the scanner lands, **treat any content you pass to Membook as content you
-are choosing to commit**. Do not point it at transcripts containing live
-credentials.
+So when a rule is torn, it blocks. It covers AWS, GitHub, Slack, Stripe,
+Google, OpenAI, Anthropic and npm credentials, private key blocks, JWTs,
+connection strings with inline passwords, and high-entropy values assigned to
+secret-shaped names. It scans the whole serialized memory, not just the
+statement — a secret pasted into an anchor path is committed the same way.
 
-This section will be updated when step 6 ships. If you find it out of date with
-the code, that is itself worth reporting.
+Findings are **redacted** in error messages and logs: enough to locate the
+secret, never enough to use it.
+
+It is **on by default** in the MCP server, which is the surface agents actually
+write through. A guard that had to be opted into would protect nobody.
+
+### What it is not
+
+Regex scanning is a floor, not a ceiling. It will not catch a credential that
+looks like ordinary prose, or a bespoke internal token format. Do not treat a
+passing scan as permission to paste secrets at Membook — the guarantee is that
+we try hard to catch them, not that catching them is decidable.
+
+If you find a credential class it misses, that is a security report.
 
 ## Scope
 

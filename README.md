@@ -84,15 +84,18 @@ wrote a memory, from what, and in what context, purely from which fields exist.
 
 ## Status
 
-| Package                            | What it is                                               | State               |
-| ---------------------------------- | -------------------------------------------------------- | ------------------- |
-| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator | **Built**, 98 tests |
-| [`@membook/core`](./packages/core) | Engine — store, index, reindex, search                   | **Built**, 57 tests |
-| `@membook/mcp`                     | MCP server (`remember` / `recall` / `session_digest`)    | Not started         |
-| `membook`                          | CLI (`init`, `status`, `review`, `verify`, `reindex`)    | Not started         |
-| Verify pass                        | The verification loop + fixture harness                  | Not started         |
+| Package                            | What it is                                               | State                |
+| ---------------------------------- | -------------------------------------------------------- | -------------------- |
+| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator | **Built**, 101 tests |
+| [`@membook/core`](./packages/core) | Engine — store, index, verify, recall, book              | **Built**, 188 tests |
+| [`@membook/mcp`](./packages/mcp)   | MCP server (`remember` / `recall` / `session_digest`)    | **Built**, 20 tests  |
+| Verify pass                        | The verification loop + fixture harness                  | **Built**            |
+| Boot pack                          | `MEMBOOK.md` generator                                   | **Built**            |
+| The three seams                    | Secret scanner, LLM re-checker, instrumentation          | **Built**            |
+| `membook`                          | CLI (`init`, `status`, `review`, `verify`, `reindex`)    | Not started          |
+| Distillation                       | Session digest → candidate memories                      | Not started          |
 
-Neither package is published to npm yet.
+Nothing is published to npm yet.
 
 ## Development
 
@@ -125,12 +128,14 @@ like others to adopt, and the verification loop is the product.
 ## Security
 
 Memories get committed, so a secret written into one is persisted and pushed.
-Scanning every distillation output before it reaches `.membook/` is a
-launch-blocking commitment — and it is **not implemented yet**; the write-path
-seam it plugs into is. Until then, treat anything you pass to Membook as
-content you are choosing to commit.
+Every write is therefore scanned before it reaches `.membook/`, and the scanner
+is **deny-biased**: a false positive costs a human glance, a false negative
+commits a credential forever, so when a rule is torn it blocks. It is on by
+default in the MCP server.
 
-Please report vulnerabilities privately — see [SECURITY.md](./SECURITY.md).
+Regex scanning is a floor, not a ceiling — a passing scan is not permission to
+paste secrets at Membook. Please report vulnerabilities privately, and a missed
+credential class counts — see [SECURITY.md](./SECURITY.md).
 
 ## License
 

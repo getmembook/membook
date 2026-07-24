@@ -10,7 +10,7 @@ Every memory is anchored to specific files. Anything whose anchored code has
 changed since it was last checked is withheld from this file rather than
 asserted.
 
-It carries the one eligible memory. 3 further memories are withheld because
+It carries all 2 eligible memories. 3 further memories are withheld because
 the code they describe has changed since they were last checked. This file is
 generated, never edited by hand — corrections belong in `.membook/memories/`.
 
@@ -22,3 +22,9 @@ Treat them as informed leads rather than established fact.
 Do not tune retrieval on BM25 alone: on a small corpus its IDF is degenerate, so a memory matching one rare term of a multi-term query outranks one that actually answers it. Term coverage scales relevance to fix this. The small-corpus regime is the normal case, not an edge case — every repository's book starts tiny, so precision-at-small-N is where this has to work.
 
 `packages/core/src/recall.ts#termCoverage`
+
+### convention (unverified)
+
+Every workspace package resolves its siblings to SOURCE, not to built dist: a vitest alias for tests and tsconfig `paths` for typecheck, with `rootDir` removed so paths may point outside the package. Without this a fresh clone cannot run `pnpm test` or `pnpm typecheck` until something has been built, and CI passes only by the luck of running build first. Package `exports` still point at dist, because source-pointing exports would break every consumer.
+
+`packages/core/vitest.config.ts`, `packages/mcp/tsconfig.json`, `packages/core/tsconfig.json`

@@ -16,9 +16,20 @@ import { search, type SearchHit, type SearchOptions } from "./search.js";
 import { verifyPass, type VerifyOptions, type VerifyReport } from "./verify.js";
 import { recall, type RecallOptions, type RecallResult } from "./recall.js";
 import { compileBook, writeBook, type BookReport } from "./book.js";
-import type { QuarantineRecord } from "./errors.js";
+import { WriteBlockedError, type QuarantineRecord } from "./errors.js";
+import {
+  FileInstrumentation,
+  NullInstrumentation,
+  type Instrumentation,
+} from "./instrumentation.js";
 
-export interface MembookOptions extends MemoryStoreOptions {}
+export interface MembookOptions extends MemoryStoreOptions {
+  /**
+   * Local event log. Off unless asked for: writing files nobody requested is
+   * not the default a local-first tool should ship.
+   */
+  instrumentation?: Instrumentation | boolean;
+}
 
 export interface StatusReport {
   indexed: number;
@@ -33,10 +44,18 @@ export interface StatusReport {
 export class Membook {
   readonly paths: RepoPaths;
   readonly store: MemoryStore;
+  readonly instrumentation: Instrumentation;
 
   constructor(root: string, options: MembookOptions = {}) {
     this.paths = repoPaths(root);
     this.store = new MemoryStore(this.paths, options);
+    this.instrumentation =
+      options.instrumentation === true
+        ? new FileInstrumentation(this.paths.telemetry)
+        : options.instrumentation === false ||
+          options.instrumentation === undefined
+        ? new NullInstrumentation()
+        : options.instrumentation;
   }
 
   private open(): IndexDb {
@@ -60,7 +79,28 @@ export class Membook {
     frontmatter: MemoryInput,
     body: string
   ): Promise<StoredMemory> {
-    const stored = await this.store.write(frontmatter, body);
+    let stored: StoredMemory;
+    try {
+      stored = await this.store.write(frontmatter, body);
+    } catch (error) {
+      // A blocked write is the single most important thing to log: it is the
+      // scanner earning its keep, and the number nobody can otherwise see.
+      if (error instanceof WriteBlockedError) {
+        this.instrumentation.record({
+          event: "write_blocked",
+          guard: error.guard,
+          rules: error.findings.map((f) => f.rule),
+        });
+      }
+      throw error;
+    }
+
+    this.instrumentation.record({
+      event: "remember",
+      id: stored.id,
+      type: stored.memfile.frontmatter.type,
+      anchors: stored.memfile.frontmatter.anchors.length,
+    });
 
     const db = this.open();
     try {
@@ -121,7 +161,17 @@ export class Membook {
   ): Promise<RecallResult> {
     const db = this.open();
     try {
-      return recall(db, query, options);
+      const result = recall(db, query, options);
+      this.instrumentation.record({
+        event: "recall",
+        query_terms: query.trim().split(/\s+/).filter(Boolean).length,
+        served: result.hits.length,
+        withheld_below_floor: result.withheld.belowFloor,
+        withheld_by_status: result.withheld.byStatus,
+        top_score: result.hits[0]?.score ?? null,
+        context_paths: options.contextPaths?.length ?? 0,
+      });
+      return result;
     } finally {
       db.close();
     }
@@ -141,6 +191,16 @@ export class Membook {
    */
   async verify(options: VerifyOptions = {}): Promise<VerifyReport> {
     const report = await verifyPass(this.paths.root, this.store, options);
+    for (const v of report.changed) {
+      this.instrumentation.record({
+        event: "verify",
+        id: v.id,
+        from: v.from,
+        to: v.to,
+        rechecked: v.rechecked,
+        outcomes: v.outcomes.map((o) => o.kind),
+      });
+    }
     if (!report.dryRun && report.changed.length > 0) await this.reindex();
     return report;
   }
@@ -152,7 +212,15 @@ export class Membook {
 
   /** Compile the boot pack and write `MEMBOOK.md`. */
   async writeBook(options: { now?: Date } = {}): Promise<BookReport> {
-    return writeBook(this.paths, this.store, options);
+    const report = await writeBook(this.paths, this.store, options);
+    this.instrumentation.record({
+      event: "book",
+      carried: report.entries.length,
+      omitted: report.omitted,
+      excluded: report.excluded,
+      tokens: report.tokens,
+    });
+    return report;
   }
 
   async status(): Promise<StatusReport> {

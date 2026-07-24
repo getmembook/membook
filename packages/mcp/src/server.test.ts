@@ -6,6 +6,7 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, MAX_RECALL_HITS } from "./server.js";
+import { FAKE_SECRETS as F } from "@membook/core";
 
 let root: string;
 let client: Client;
@@ -121,6 +122,25 @@ describe("remember", () => {
       },
     });
     expect(result.isError).toBe(true);
+  });
+
+  // The scanner is launch-blocking, and this is the surface agents write
+  // through. A guard that had to be opted into would protect nobody.
+  it("blocks a credential by default, with no guard configured", async () => {
+    const result = await client.callTool({
+      name: "remember",
+      arguments: {
+        statement:
+          `Publish releases with ${F.githubToken} from CI.`,
+        type: "gotcha",
+        paths: ["src/auth.ts"],
+      },
+    });
+    expect(result.isError).toBe(true);
+    const text = (result.content as Array<{ text?: string }>)[0]!.text!;
+    expect(text).toMatch(/secret-scan|GitHub token/);
+    // And it must not echo the credential back into logs or transcripts.
+    expect(text).not.toContain(F.githubToken);
   });
 
   it("reports a rejected write rather than failing silently", async () => {

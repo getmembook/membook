@@ -173,6 +173,65 @@ It reports **withheld-as-drifted separately from omitted-for-space**. Blurring
 them into one count would tell the reader that the missing memories were less
 useful, when in truth they were no longer trustworthy: the opposite lesson.
 
+## The secret scanner
+
+Deny-biased, and on by default in the MCP server. See
+[SECURITY.md](../../SECURITY.md) for coverage and limits.
+
+```ts
+new Membook(root, { guards: [new SecretScanGuard()] });
+```
+
+The asymmetry decides every judgement call: a false positive costs a human
+glance, a false negative commits a credential forever. So when a rule is torn,
+it blocks. Findings are redacted — enough to locate the secret, never enough to
+use it.
+
+## The re-checker
+
+When an anchor's code changes, something must decide whether the memory still
+holds. `LlmRechecker` asks a model, through a thin provider adapter.
+
+```ts
+await membook.verify({
+  rechecker: new LlmRechecker({
+    provider: new AnthropicProvider({ apiKey: process.env.ANTHROPIC_API_KEY! }),
+  }),
+});
+```
+
+**It is a skeptic, not a judge.** Its dangerous failure is the _false restore_ —
+laundering a stale memory into a verified one. `verified` is a claim users act
+on, so a re-checker that rubber-stamps is worse than none at all: it converts
+honest uncertainty into confident wrongness.
+
+Every path that is not an explicit, well-formed verdict leaves the memory
+stale — unparseable reply, failed repair, provider down, unknown verdict. The
+only route to `restore` is a schema-valid verdict saying so, and the prompt
+tells the model that absence of contradiction is not evidence.
+
+Replies are validated against a schema, with **one** repair attempt that asks
+only for the shape — never re-arguing the substance, which would invite the
+model to talk itself into a restore. The prompt is versioned in
+[`prompts/recheck.md`](../../prompts/recheck.md) and reviewed like code.
+
+## Instrumentation
+
+Local file, append-only JSONL, **no network, ever**. Off unless asked for.
+
+```ts
+new Membook(root, { instrumentation: true }); // .membook/telemetry/events.jsonl
+```
+
+It records what recall served _and withheld_, verify transitions, re-check
+verdicts with the checker that produced them, blocked writes with the rule that
+fired, and book compilation counts.
+
+This exists so the product's claims become numbers a user can check on their own
+machine. Claims that cannot be falsified locally are marketing. Logging is
+best-effort and swallows its own errors — the one place in this codebase where
+that is correct, because telemetry must never break the thing it observes.
+
 ## The write-path seam
 
 Every write passes through configured `WriteGuard`s before touching disk. A

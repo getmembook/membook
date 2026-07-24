@@ -41,6 +41,41 @@ export {
   type SearchOptions,
 } from "./search.js";
 export {
+  FileInstrumentation,
+  NullInstrumentation,
+  type Instrumentation,
+  type MembookEvent,
+  type RecallEvent,
+  type RememberEvent,
+  type VerifyEvent,
+  type RecheckEvent,
+  type WriteBlockedEvent,
+  type BookEvent,
+} from "./instrumentation.js";
+export { FAKE_SECRETS } from "./fake-secrets.js";
+export {
+  SecretScanGuard,
+  scanForSecrets,
+  entropy,
+  redact,
+  SECRET_RULES,
+  type SecretRule,
+  type SecretScanOptions,
+} from "./secret-scan.js";
+export {
+  AnthropicProvider,
+  OpenAiCompatibleProvider,
+  ProviderError,
+  type ModelProvider,
+  type CompletionRequest,
+  type CompletionResult,
+} from "./provider.js";
+export {
+  LlmRechecker,
+  VERDICTS,
+  type LlmRecheckerOptions,
+} from "./llm-recheck.js";
+export {
   compileBook,
   writeBook,
   expectedValue,

@@ -5,7 +5,9 @@ import {
   headSha,
   isGitRepository,
   type RecallHit,
+  SecretScanGuard,
   type WriteGuard,
+  type Instrumentation,
 } from "@membook/core";
 import { MEMORY_TYPES, computeMemoryId, type MemoryInput } from "@membook/spec";
 
@@ -29,6 +31,8 @@ export interface CreateServerOptions {
   model?: string;
   session?: string;
   guards?: readonly WriteGuard[];
+  /** Local event log. Defaults to on; never leaves the machine. */
+  instrumentation?: Instrumentation | boolean;
   /** Injected for deterministic tests. */
   now?: () => Date;
 }
@@ -62,10 +66,13 @@ function renderHit(hit: RecallHit): string {
 export function createServer(options: CreateServerOptions): McpServer {
   const { root } = options;
   const now = options.now ?? (() => new Date());
-  const membook = new Membook(
-    root,
-    options.guards ? { guards: options.guards } : {}
-  );
+  // The scanner is ON by default, and instrumentation with it. This is the
+  // surface agents actually write through, so a guard that had to be opted
+  // into would protect nobody. Telemetry is a local file and never network.
+  const membook = new Membook(root, {
+    guards: options.guards ?? [new SecretScanGuard()],
+    instrumentation: options.instrumentation ?? true,
+  });
 
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
