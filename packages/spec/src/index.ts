@@ -7,7 +7,10 @@ export {
   lineRangeSchema,
   gitAnchorSchema,
   anchorSchema,
+  PROVENANCE_ORIGINS,
   provenanceSchema,
+  distilledProvenanceSchema,
+  authoredProvenanceSchema,
   memorySchema,
   memoryWireSchema,
   CANONICAL_TIMESTAMP_RE,
@@ -18,6 +21,9 @@ export {
   type GitAnchor,
   type Anchor,
   type Provenance,
+  type ProvenanceOrigin,
+  type DistilledProvenance,
+  type AuthoredProvenance,
   type Memory,
   type MemoryInput,
   type MemoryFileInput,
@@ -27,7 +33,13 @@ export { MemfileValidationError } from "./errors.js";
 
 export { formatAnchor, parseAnchor } from "./anchor.js";
 
-export { computeMemoryId, memoryFilename, idFromFilename } from "./id.js";
+export {
+  computeMemoryId,
+  resolveMemoryId,
+  memoryFilename,
+  idFromFilename,
+  MEMORY_ID_LENGTH_LADDER,
+} from "./id.js";
 
 export {
   serializeMemfile,

@@ -33,6 +33,7 @@ function validMemory(overrides: Partial<MemoryInput> = {}): MemoryInput {
     verified: "2026-07-24T08:00:00Z",
     anchors: [{ path: "src/auth.ts", commit: COMMIT }],
     provenance: {
+      origin: "distilled",
       session: "sess-1",
       agent: "claude-code",
       model: "claude-opus-4-8",
@@ -54,10 +55,13 @@ describe("golden examples", () => {
     );
   });
 
-  it.each(files)("%s round-trips as a fixed point", (file) => {
-    const source = readFileSync(join(EXAMPLES_DIR, file), "utf8");
-    const memfile = parseMemfile(source, file);
-    expect(serializeMemfileRecord(memfile, file)).toBe(source);
+  it("ships a golden fixture for both provenance origins", () => {
+    const origins = files.map(
+      (f) =>
+        parseMemfile(readFileSync(join(EXAMPLES_DIR, f), "utf8"), f).frontmatter
+          .provenance.origin,
+    );
+    expect(new Set(origins)).toEqual(new Set(["distilled", "authored"]));
   });
 
   it.each(files)("%s filename matches its id", (file) => {
@@ -66,6 +70,38 @@ describe("golden examples", () => {
       file,
     );
     expect(file).toBe(`${frontmatter.id}.mem.md`);
+  });
+});
+
+/**
+ * INVARIANT — the standard's load-bearing guarantee.
+ *
+ * Serialization is a fixed point: parsing a canonical Memfile and
+ * re-serializing it reproduces the source BYTE FOR BYTE, and the frontmatter
+ * survives the round trip unchanged. Memories live in git and are reviewed in
+ * pull requests, so any drift here shows up as phantom diffs on files nobody
+ * edited. This must hold for every golden file, forever.
+ */
+describe("INVARIANT: byte-exact round-trip", () => {
+  const files = readdirSync(EXAMPLES_DIR).filter((f) => f.endsWith(".mem.md"));
+
+  it.each(files)("serialize(parse(%s)) is byte-identical", (file) => {
+    const source = readFileSync(join(EXAMPLES_DIR, file), "utf8");
+    expect(serializeMemfileRecord(parseMemfile(source, file), file)).toBe(source);
+  });
+
+  it.each(files)("parse(serialize(parse(%s))) is unchanged", (file) => {
+    const source = readFileSync(join(EXAMPLES_DIR, file), "utf8");
+    const once = parseMemfile(source, file);
+    const twice = parseMemfile(serializeMemfileRecord(once, file), file);
+    expect(twice).toEqual(once);
+  });
+
+  it("holds for a memory built in memory, not just for files on disk", () => {
+    const text = serializeMemfile(validMemory(), "A statement.");
+    expect(serializeMemfileRecord(parseMemfile(text), text ? undefined : "")).toBe(
+      text,
+    );
   });
 });
 
@@ -122,6 +158,12 @@ describe("serialization determinism", () => {
     }
   });
 
+  it("emits origin as the first key of the provenance block", () => {
+    const text = serializeMemfile(validMemory(), "A statement.");
+    const provenance = text.slice(text.indexOf("provenance:"));
+    expect(provenance.split("\n")[1]?.trim()).toBe("origin: distilled");
+  });
+
   it("quotes timestamps so YAML 1.1 cannot coerce them to dates", () => {
     const text = serializeMemfile(validMemory(), "A statement.");
     expect(text).toContain('created: "2026-07-21T16:42:00Z"');
@@ -168,6 +210,74 @@ describe("loud failure", () => {
     expect(() => serializeMemfile(withDate, "A statement.")).toThrow(
       MemfileValidationError,
     );
+  });
+
+  // The presence of a source_hash must MEAN something: a nameable artifact
+  // stands behind it. A plausible-looking junk hash on a hand-authored memory
+  // is worse for an auditor than no hash at all, so it cannot validate.
+  it("rejects authored provenance carrying a source_hash", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: {
+            origin: "authored",
+            session: "sess-1",
+            agent: "claude-code",
+            model: "claude-opus-4-8",
+            source_hash: SOURCE_HASH,
+          } as never,
+        }),
+        "A statement.",
+      ),
+    ).toThrow(MemfileValidationError);
+  });
+
+  it("rejects distilled provenance with no source_hash", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: {
+            origin: "distilled",
+            session: "sess-1",
+            agent: "claude-code",
+            model: "claude-opus-4-8",
+          } as never,
+        }),
+        "A statement.",
+      ),
+    ).toThrow(MemfileValidationError);
+  });
+
+  it("rejects provenance with no origin discriminator", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: {
+            session: "sess-1",
+            agent: "claude-code",
+            model: "claude-opus-4-8",
+            source_hash: SOURCE_HASH,
+          } as never,
+        }),
+        "A statement.",
+      ),
+    ).toThrow(MemfileValidationError);
+  });
+
+  it("accepts authored provenance with no source_hash", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: {
+            origin: "authored",
+            session: "sess-1",
+            agent: "claude-code",
+            model: "claude-opus-4-8",
+          },
+        }),
+        "A statement.",
+      ),
+    ).not.toThrow();
   });
 
   it("rejects an anchorless memory on write", () => {

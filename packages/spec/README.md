@@ -30,6 +30,7 @@ anchors:
     line_range: [18, 46]
     commit: 9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d
 provenance:
+  origin: distilled
   session: sess-01H8X4M2
   agent: claude-code
   model: claude-opus-4-8
@@ -78,6 +79,28 @@ offset never shows up as a diff.
 Timestamps are always serialized double-quoted, by explicit rule rather than by
 the emitter's quoting heuristics.
 
+### Provenance origin governs `source_hash`
+
+`provenance.origin` is a discriminator — always serialized, leading the block,
+with no default, because defaulting either way would silently mean the wrong
+thing. Future origins (`imported`, `registry`) stay additive.
+
+| `origin` | `source_hash` |
+| --- | --- |
+| `distilled` | **required** — sha256 of the exact digest artifact the distiller consumed |
+| `authored` | **forbidden** — written directly; there is no artifact behind it |
+
+Forbidden, not optional. A hand-authored memory carrying a plausible-looking
+junk hash would validate under an optional field, and an unfalsifiable
+assertion dressed as provenance is worse for an auditor than no assertion at
+all. Because absence is enforced, **the presence of a hash is meaningful**: if
+you see one, a nameable artifact stands behind it.
+
+The digest artifact lives in `.membook/` runtime storage, which is not
+committed — so the audit claim is *locally* verifiable where the archive
+exists, and never globally. Provenance for an `authored` memory is the git
+history of the commit that introduced it.
+
 ### Every memory carries at least one anchor
 
 The anchor is the product. A memory with no anchor is not a memory — it is a
@@ -92,11 +115,32 @@ Anchor paths are repo-relative, with no absolute paths and no `.` or `..`
 segments. Commits are full 40-character SHAs — abbreviations are ambiguous, and
 verification cannot afford ambiguity.
 
+### Ids are content-addressed, and collisions are specified
+
+An id is `m-` plus the leading hex of `sha256(body)`, four characters by
+default. Four hex characters is 16 bits, which is a small space once a repo
+holds hundreds of memories, so collisions are expected rather than
+hypothetical.
+
+On collision the id extends **4 → 8 → 12** characters (`resolveMemoryId`).
+Because a longer id is a prefix-extension of a shorter one, the ladder is
+deterministic: the same content in the same store always resolves to the same
+id. Exhausting the ladder throws rather than looping.
+
+Ids are assigned once, at creation. They are not re-derived when a memory is
+edited — memories evolve through PR review or `supersedes`, never by silently
+renaming a file out from under a reviewer.
+
 ### Serialization is deterministic
 
 Memories live in git and get reviewed in pull requests, so identical content must
 produce byte-identical files: stable key order, normalized body whitespace, a
-single trailing newline. Round-tripping is a fixed point.
+single trailing newline.
+
+The load-bearing guarantee is a **named invariant** in the test suite:
+serialization is a fixed point, so `serialize(parse(s))` reproduces `s` byte for
+byte and `parse(serialize(m))` leaves `m` unchanged, for every golden file. Any
+drift shows up as phantom diffs on files nobody edited.
 
 ### Validation is loud
 
@@ -153,7 +197,7 @@ if (!result.ok) quarantine(file, result.error.issues);
 | `created` | yes | Canonical UTC timestamp |
 | `verified` | conditional | Required unless `status` is `unverified` |
 | `anchors` | yes | At least one |
-| `provenance` | yes | `session`, `agent`, `model`, `source_hash` |
+| `provenance` | yes | `origin`, `session`, `agent`, `model`, and `source_hash` iff `distilled` |
 | `supersedes` | no | Id of the memory this replaces |
 
 Unknown fields are rejected.

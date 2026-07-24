@@ -46,6 +46,7 @@ const examples: Example[] = [
         { path: ".gitignore", commit: COMMIT_A },
       ],
       provenance: {
+        origin: "distilled",
         session: "sess-01H8X2K9",
         agent: "claude-code",
         model: "claude-opus-4-8",
@@ -78,6 +79,7 @@ const examples: Example[] = [
         },
       ],
       provenance: {
+        origin: "distilled",
         session: "sess-01H8X4M2",
         agent: "claude-code",
         model: "claude-opus-4-8",
@@ -104,11 +106,13 @@ const examples: Example[] = [
         { path: "packages/spec/src/serialize.ts", commit: COMMIT_A },
         { path: "packages/core/src/store/read.ts", commit: COMMIT_A },
       ],
+      // Written directly rather than distilled from a session digest, so
+      // there is no artifact to hash and `source_hash` is forbidden.
       provenance: {
+        origin: "authored",
         session: "sess-01H8W9Q7",
         agent: "claude-code",
         model: "claude-opus-4-8",
-        source_hash: SOURCE_HASH,
       },
     },
   },
@@ -137,6 +141,7 @@ const examples: Example[] = [
         { path: "packages/core/src/git/diff.ts", commit: COMMIT_A },
       ],
       provenance: {
+        origin: "distilled",
         session: "sess-01H8XB4T",
         agent: "claude-code",
         model: "claude-opus-4-8",
@@ -164,6 +169,7 @@ const examples: Example[] = [
         { path: "packages/core/src/git/log.ts", commit: COMMIT_B },
       ],
       provenance: {
+        origin: "distilled",
         session: "sess-01H8V2C1",
         agent: "claude-code",
         model: "claude-opus-4-8",

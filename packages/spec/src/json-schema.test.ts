@@ -62,6 +62,7 @@ describe("wire schema", () => {
     verified: "2026-07-24T08:00:00Z",
     anchors: [{ path: "src/auth.ts", commit: COMMIT }],
     provenance: {
+      origin: "distilled",
       session: "sess-1",
       agent: "claude-code",
       model: "claude-opus-4-8",

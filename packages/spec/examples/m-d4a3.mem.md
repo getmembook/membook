@@ -16,6 +16,7 @@ anchors:
     path: packages/core/src/git/diff.ts
     commit: 9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d
 provenance:
+  origin: distilled
   session: sess-01H8XB4T
   agent: claude-code
   model: claude-opus-4-8

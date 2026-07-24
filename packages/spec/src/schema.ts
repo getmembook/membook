@@ -78,14 +78,54 @@ export const gitAnchorSchema = z
  */
 export const anchorSchema = gitAnchorSchema;
 
-export const provenanceSchema = z.object({
+export const PROVENANCE_ORIGINS = ["distilled", "authored"] as const;
+
+const provenanceBase = {
   session: z.string().min(1),
   agent: z.string().min(1),
   model: z.string().min(1),
-  source_hash: z
-    .string()
-    .regex(/^[0-9a-f]{64}$/, "source_hash must be a sha256 hex digest"),
-});
+};
+
+/**
+ * Distilled from a session: `source_hash` is REQUIRED, and is the sha256 of
+ * the exact digest artifact the distiller consumed.
+ */
+export const distilledProvenanceSchema = z
+  .object({
+    origin: z.literal("distilled"),
+    ...provenanceBase,
+    source_hash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/, "source_hash must be a sha256 hex digest"),
+  })
+  .strict();
+
+/**
+ * Written by hand: `source_hash` is FORBIDDEN, not optional. Provenance here
+ * is the git history of the commit that introduced the memory.
+ */
+export const authoredProvenanceSchema = z
+  .object({
+    origin: z.literal("authored"),
+    ...provenanceBase,
+  })
+  // .strict() is what forbids `source_hash` here: an unrecognized key on an
+  // authored memory is a validation failure, not a field to ignore.
+  .strict();
+
+/**
+ * `origin` governs `source_hash` so that the field's PRESENCE is meaningful:
+ * if a memory carries a hash, a nameable artifact stands behind it, full stop.
+ * A plausible-looking junk hash on a hand-authored memory cannot validate.
+ *
+ * Always serialized, and leads the provenance block. Future origins
+ * (`imported`, `registry`) stay additive, as with anchor `kind`. There is no
+ * default: defaulting either way would silently mean the wrong thing.
+ */
+export const provenanceSchema = z.discriminatedUnion("origin", [
+  distilledProvenanceSchema,
+  authoredProvenanceSchema,
+]);
 
 /**
  * CANONICAL TIMESTAMP FORM — pinned by the spec, not an implementation detail.
@@ -192,7 +232,10 @@ export type MemoryStatus = (typeof MEMORY_STATUSES)[number];
 export type MemoryScope = (typeof MEMORY_SCOPES)[number];
 export type GitAnchor = z.infer<typeof gitAnchorSchema>;
 export type Anchor = z.infer<typeof anchorSchema>;
+export type ProvenanceOrigin = (typeof PROVENANCE_ORIGINS)[number];
 export type Provenance = z.infer<typeof provenanceSchema>;
+export type DistilledProvenance = z.infer<typeof distilledProvenanceSchema>;
+export type AuthoredProvenance = z.infer<typeof authoredProvenanceSchema>;
 export type Memory = z.infer<typeof memorySchema>;
 
 /**

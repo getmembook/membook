@@ -12,6 +12,7 @@ anchors:
     path: packages/core/src/git/log.ts
     commit: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b
 provenance:
+  origin: distilled
   session: sess-01H8V2C1
   agent: claude-code
   model: claude-opus-4-8

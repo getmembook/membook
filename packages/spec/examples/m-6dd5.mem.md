@@ -14,6 +14,7 @@ anchors:
     line_range: [18, 46]
     commit: 9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d
 provenance:
+  origin: distilled
   session: sess-01H8X4M2
   agent: claude-code
   model: claude-opus-4-8

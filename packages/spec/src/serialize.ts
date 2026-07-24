@@ -43,7 +43,14 @@ const ANCHOR_KEY_ORDER = ["kind", "path", "symbol", "line_range", "commit"] as c
 
 /** Fields quoted by explicit rule below — never by the emitter's heuristics. */
 const TIMESTAMP_KEYS = new Set(["created", "verified"]);
-const PROVENANCE_KEY_ORDER = ["session", "agent", "model", "source_hash"] as const;
+/** `origin` leads, for the same reason `kind` leads an anchor: it governs. */
+const PROVENANCE_KEY_ORDER = [
+  "origin",
+  "session",
+  "agent",
+  "model",
+  "source_hash",
+] as const;
 
 function orderKeys<T extends Record<string, unknown>>(
   value: T,
