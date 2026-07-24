@@ -21,19 +21,21 @@ afterEach(async () => {
   await cleanup();
 });
 
-async function seed(spec: {
+interface SeedSpec {
   body: string;
   type?: MemoryInput["type"];
   status?: MemoryInput["status"];
   confidence?: number;
   paths?: string[];
-}): Promise<string> {
-  const id = computeMemoryId(spec.body);
+}
+
+function inputFor(spec: SeedSpec): { frontmatter: MemoryInput; body: string } {
   const status = spec.status ?? "verified";
-  await membook.remember(
-    {
+  return {
+    body: spec.body,
+    frontmatter: {
       memfile: 1,
-      id,
+      id: computeMemoryId(spec.body),
       type: spec.type ?? "gotcha",
       status,
       scope: "repo",
@@ -52,9 +54,24 @@ async function seed(spec: {
         model: "claude-opus-4-8",
       },
     },
-    spec.body
-  );
-  return id;
+  };
+}
+
+async function seed(spec: SeedSpec): Promise<void> {
+  const { frontmatter, body } = inputFor(spec);
+  await membook.remember(frontmatter, body);
+}
+
+/**
+ * Batched, because several tests here seed 60 memories: one remember() per
+ * memory means one SQLite open/WAL/close cycle each, which is what timed
+ * these tests out on the Windows CI runners.
+ */
+async function seedMany(
+  specs: SeedSpec[],
+  target: Membook = membook
+): Promise<void> {
+  await target.rememberMany(specs.map(inputFor));
 }
 
 /**
@@ -64,9 +81,11 @@ async function seed(spec: {
  */
 describe("INVARIANT: identical book state yields byte-identical output", () => {
   it("is stable across repeated compilations", async () => {
-    for (let i = 0; i < 5; i++) {
-      await seed({ body: `Durable fact number ${i} about the system.` });
-    }
+    await seedMany(
+      Array.from({ length: 5 }, (_, i) => ({
+        body: `Durable fact number ${i} about the system.`,
+      }))
+    );
     const a = await membook.compileBook({ now: NOW });
     const b = await membook.compileBook({ now: NOW });
     expect(b.content).toBe(a.content);
@@ -78,17 +97,17 @@ describe("INVARIANT: identical book state yields byte-identical output", () => {
       "Beta fact about the retry ladder in the client.",
       "Gamma fact about index rebuild determinism.",
     ];
-    for (const body of bodies) await seed({ body });
+    await seedMany(bodies.map((body) => ({ body })));
     const forward = await membook.compileBook({ now: NOW });
 
     const other = await tempRepo();
     try {
       const second = new Membook(other.root);
-      const saved = membook;
-      membook = second;
-      for (const body of [...bodies].reverse()) await seed({ body });
+      await seedMany(
+        [...bodies].reverse().map((body) => ({ body })),
+        second
+      );
       const reversed = await second.compileBook({ now: NOW });
-      membook = saved;
       expect(reversed.content).toBe(forward.content);
     } finally {
       await other.cleanup();
@@ -107,12 +126,12 @@ describe("INVARIANT: identical book state yields byte-identical output", () => {
 
 describe("the token cap", () => {
   it("never exceeds the cap, however many memories exist", async () => {
-    for (let i = 0; i < 60; i++) {
-      await seed({
+    await seedMany(
+      Array.from({ length: 60 }, (_, i) => ({
         body: `Memory ${i}: a reasonably wordy statement about subsystem ${i} that takes up a fair amount of room in the compiled book, deliberately.`,
         paths: [`src/mod${i}.ts`],
-      });
-    }
+      }))
+    );
     const report = await membook.compileBook({ now: NOW });
     expect(report.tokens).toBeLessThanOrEqual(BOOK.maxTokens);
     expect(report.omitted).toBeGreaterThan(0);
@@ -120,16 +139,13 @@ describe("the token cap", () => {
 
   it("keeps scanning past an entry too large to fit", async () => {
     // A single long memory must not shut out the short ones behind it.
-    await seed({
-      body: `Huge memory. ${"padding ".repeat(900)}`,
-      paths: ["src/big.ts"],
-    });
-    for (let i = 0; i < 3; i++) {
-      await seed({
+    await seedMany([
+      { body: `Huge memory. ${"padding ".repeat(900)}`, paths: ["src/big.ts"] },
+      ...Array.from({ length: 3 }, (_, i) => ({
         body: `Short but valuable fact ${i}.`,
         paths: [`src/s${i}.ts`],
-      });
-    }
+      })),
+    ]);
     const report = await membook.compileBook({ now: NOW });
     expect(report.entries.length).toBeGreaterThanOrEqual(3);
     expect(report.tokens).toBeLessThanOrEqual(BOOK.maxTokens);
@@ -229,18 +245,20 @@ describe("the header", () => {
   });
 
   it("says it carries everything when it does", async () => {
-    for (let i = 0; i < 3; i++) await seed({ body: `Fact number ${i}.` });
+    await seedMany(
+      Array.from({ length: 3 }, (_, i) => ({ body: `Fact number ${i}.` }))
+    );
     const { content } = await membook.compileBook({ now: NOW });
     expect(content).toContain("all 3 eligible memories");
   });
 
   it("admits when it is only carrying the best of a larger set", async () => {
-    for (let i = 0; i < 60; i++) {
-      await seed({
+    await seedMany(
+      Array.from({ length: 60 }, (_, i) => ({
         body: `Memory ${i}: a wordy statement about subsystem ${i} taking real room in the compiled book.`,
         paths: [`src/m${i}.ts`],
-      });
-    }
+      }))
+    );
     const { content, omitted } = await membook.compileBook({ now: NOW });
     expect(omitted).toBeGreaterThan(0);
     expect(content).toMatch(/highest-value of \d+ eligible memories/);
@@ -249,9 +267,11 @@ describe("the header", () => {
   // Conflating these two would teach the reader the opposite lesson: that the
   // missing memories were less useful, rather than no longer trustworthy.
   it("distinguishes withheld-as-drifted from omitted-for-space", async () => {
-    await seed({ body: "A live and useful fact about indexing." });
-    await seed({ body: "A drifted claim about the indexer.", status: "stale" });
-    await seed({ body: "Another drifted claim.", status: "stale" });
+    await seedMany([
+      { body: "A live and useful fact about indexing." },
+      { body: "A drifted claim about the indexer.", status: "stale" as const },
+      { body: "Another drifted claim.", status: "stale" as const },
+    ]);
 
     const { content, excluded, omitted } = await membook.compileBook({
       now: NOW,
@@ -264,7 +284,9 @@ describe("the header", () => {
   });
 
   it("wraps every line, whatever the counts interpolate to", async () => {
-    for (let i = 0; i < 3; i++) await seed({ body: `Fact number ${i}.` });
+    await seedMany(
+      Array.from({ length: 3 }, (_, i) => ({ body: `Fact number ${i}.` }))
+    );
     const { content } = await membook.compileBook({ now: NOW });
     const headerLines = content.split("\n\n### ")[0]!.split("\n");
     for (const line of headerLines) expect(line.length).toBeLessThanOrEqual(80);
