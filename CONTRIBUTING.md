@@ -149,3 +149,15 @@ as _Unverified_ while `git log --show-signature` says the signature is good:
 gh auth refresh -h github.com -s admin:ssh_signing_key
 gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "commit signing"
 ```
+
+## Project memory is live in this repo
+
+This repository dogfoods its own product. `.claude/settings.json` carries a
+`UserPromptSubmit` hook: if you work here with Claude Code, relevant project
+memories are injected into your prompts automatically. It reads the local
+build (`packages/cli/dist`), so it silently does nothing until you have run
+`pnpm build` — and silently does nothing on any failure, by design.
+
+Not using Claude Code, or not wanting the injection? Delete the file locally;
+nothing else depends on it. Memories themselves live in `.membook/memories/`
+and are reviewed in pull requests like any other change.
