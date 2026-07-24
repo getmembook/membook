@@ -105,10 +105,11 @@ Changes to published packages need a [changeset](https://github.com/changesets/c
 pnpm changeset
 ```
 
-Publishing itself is documented in [docs/releasing.md](./docs/releasing.md).
-Read it before releasing anything — there is no release workflow yet, and the
-process has several traps that produce misleading errors, including one that
-ships a package whose binary silently never links.
+Publishing runs from CI: merged changesets open a version PR, and merging that
+publishes with provenance — see [docs/releasing.md](./docs/releasing.md). Do
+not publish from a laptop; the manual process it replaced had several traps
+that produce misleading errors, including one that ships a package whose
+binary silently never links, and the runbook records them as history.
 
 ## Code style
 
@@ -149,3 +150,15 @@ as _Unverified_ while `git log --show-signature` says the signature is good:
 gh auth refresh -h github.com -s admin:ssh_signing_key
 gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "commit signing"
 ```
+
+## Project memory is live in this repo
+
+This repository dogfoods its own product. `.claude/settings.json` carries a
+`UserPromptSubmit` hook: if you work here with Claude Code, relevant project
+memories are injected into your prompts automatically. It reads the local
+build (`packages/cli/dist`), so it silently does nothing until you have run
+`pnpm build` — and silently does nothing on any failure, by design.
+
+Not using Claude Code, or not wanting the injection? Delete the file locally;
+nothing else depends on it. Memories themselves live in `.membook/memories/`
+and are reviewed in pull requests like any other change.
