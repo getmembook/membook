@@ -7,6 +7,7 @@ import {
   type MemoryInput,
 } from "./schema.js";
 import { MemfileValidationError } from "./errors.js";
+import { readDeclaredVersion, schemaForVersion } from "./versions.js";
 
 /**
  * A parsed Memfile: validated machine layer + the human statement body.
@@ -39,7 +40,13 @@ const KEY_ORDER = [
  * `kind` leads every anchor map so PR review can scan what kind of anchor
  * changed without reading the rest of the entry.
  */
-const ANCHOR_KEY_ORDER = ["kind", "path", "symbol", "line_range", "commit"] as const;
+const ANCHOR_KEY_ORDER = [
+  "kind",
+  "path",
+  "symbol",
+  "line_range",
+  "commit",
+] as const;
 
 /** Fields quoted by explicit rule below — never by the emitter's heuristics. */
 const TIMESTAMP_KEYS = new Set(["created", "verified"]);
@@ -58,7 +65,7 @@ const PROVENANCE_KEY_ORDER = [
 
 function orderKeys<T extends Record<string, unknown>>(
   value: T,
-  order: readonly string[],
+  order: readonly string[]
 ): Record<string, unknown> {
   const ordered: Record<string, unknown> = {};
   for (const key of order) {
@@ -75,7 +82,7 @@ function orderKeys<T extends Record<string, unknown>>(
 function orderFrontmatter(memory: Memory): Record<string, unknown> {
   const ordered = orderKeys(memory, KEY_ORDER);
   ordered["anchors"] = memory.anchors.map((anchor) =>
-    orderKeys(anchor, ANCHOR_KEY_ORDER),
+    orderKeys(anchor, ANCHOR_KEY_ORDER)
   );
   ordered["provenance"] = orderKeys(memory.provenance, PROVENANCE_KEY_ORDER);
   return ordered;
@@ -94,7 +101,7 @@ function orderFrontmatter(memory: Memory): Record<string, unknown> {
 export function serializeMemfile(
   frontmatter: MemoryInput,
   body: string,
-  file?: string,
+  file?: string
 ): string {
   const result = memoryWireSchema.safeParse(frontmatter);
   if (!result.success) {
@@ -104,7 +111,7 @@ export function serializeMemfile(
   if (trimmedBody.length === 0) {
     throw new MemfileValidationError(
       ["body: a memory must carry a human-readable statement"],
-      file,
+      file
     );
   }
   const doc = new Document(orderFrontmatter(result.data));
@@ -146,18 +153,28 @@ export function parseMemfile(source: string, file?: string): Memfile {
   } catch (cause) {
     throw new MemfileValidationError(
       [`frontmatter: unparseable YAML — ${(cause as Error).message}`],
-      file,
+      file
     );
   }
 
   if (Object.keys(parsed.data).length === 0) {
     throw new MemfileValidationError(
-      ["frontmatter: missing — a Memfile must open with a YAML frontmatter block"],
-      file,
+      [
+        "frontmatter: missing — a Memfile must open with a YAML frontmatter block",
+      ],
+      file
     );
   }
 
-  const result = memorySchema.safeParse(parsed.data);
+  // Dispatch on the DECLARED version before validating against anything.
+  // Validating a future file against the current schema would report a pile of
+  // field-level errors about a file that is perfectly well formed, sending the
+  // reader to repair data that is not broken.
+  const declared = readDeclaredVersion(parsed.data);
+  const schema =
+    declared === null ? memorySchema : schemaForVersion(declared, file).file;
+
+  const result = schema.safeParse(parsed.data);
   if (!result.success) {
     throw MemfileValidationError.fromZodError(result.error, file);
   }
@@ -166,7 +183,7 @@ export function parseMemfile(source: string, file?: string): Memfile {
   if (body.length === 0) {
     throw new MemfileValidationError(
       ["body: a memory must carry a human-readable statement"],
-      file,
+      file
     );
   }
 
@@ -176,8 +193,10 @@ export function parseMemfile(source: string, file?: string): Memfile {
 /** Non-throwing parse, for bulk reads that quarantine failures. */
 export function safeParseMemfile(
   source: string,
-  file?: string,
-): { ok: true; memfile: Memfile } | { ok: false; error: MemfileValidationError } {
+  file?: string
+):
+  | { ok: true; memfile: Memfile }
+  | { ok: false; error: MemfileValidationError } {
   try {
     return { ok: true, memfile: parseMemfile(source, file) };
   } catch (error) {
@@ -190,6 +209,9 @@ export function safeParseMemfile(
  * Re-serialize a parsed Memfile. Round-tripping must be a fixed point:
  * parse(serialize(x)) === x and serialize(parse(s)) === s for canonical s.
  */
-export function serializeMemfileRecord(memfile: Memfile, file?: string): string {
+export function serializeMemfileRecord(
+  memfile: Memfile,
+  file?: string
+): string {
   return serializeMemfile(memfile.frontmatter, memfile.body, file);
 }
