@@ -152,3 +152,52 @@ CI publish. Releases today are entirely manual, following this document.
 When that workflow is written it must encode the two rules above — **pnpm, and
 dependency order** — and will need a granular token with both settings as
 `NPM_TOKEN`, because CI cannot answer an OTP prompt.
+
+## Automated releases (CI)
+
+Publishing runs from `.github/workflows/release.yml`, not a laptop. A release is
+always a reviewed pull request:
+
+1. Merge PRs to `main` as normal. Each carries one or more `.changeset/*.md`
+   entries describing the change and its bump.
+2. The release workflow sees the pending changesets and opens a
+   **"chore: version packages"** PR that bumps versions and writes changelogs.
+   Nothing is published yet.
+3. Review that PR — it is the last chance to see exactly what versions ship —
+   and merge it.
+4. The workflow runs again, finds no changesets left, and **publishes**, in
+   dependency order, with a provenance attestation on every tarball.
+
+### One-time setup on npm
+
+The workflow authenticates with an npm **granular automation token**, stored as
+the `NPM_TOKEN` repository secret:
+
+1. npmjs.com → Access Tokens → Generate → **Granular Access Token**.
+   - Packages: **all four** `@membook/*` and `membook` (or the `@membook` scope).
+   - Permission: **Read and write**.
+   - Crucially, enable **"Bypass two-factor authentication"** — an automation
+     token that prompts for 2FA cannot publish from CI.
+2. GitHub → repo → Settings → Secrets and variables → Actions →
+   **New repository secret** named `NPM_TOKEN`.
+
+The token is the only stored credential. Provenance does not depend on it — it
+comes from the workflow's OIDC identity — so even a leaked token cannot forge a
+tarball's origin.
+
+### Verifying a release
+
+After publishing, every package page on npm should show a **"Provenance"**
+section linking back to the exact commit and workflow run. Confirm with:
+
+```bash
+npm view membook dist.attestations   # should be present, not "none"
+```
+
+### Future: tokenless (trusted publishing)
+
+npm supports OIDC "trusted publishing" that removes the stored token entirely,
+but it runs through the npm CLI, whereas this repo publishes via
+pnpm + changesets. Moving to it means routing the publish step through npm (or a
+pnpm version that implements the OIDC flow). Worth doing later; not a launch
+blocker, and the token above is well-scoped in the meantime.
