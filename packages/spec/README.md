@@ -8,6 +8,25 @@ the standard; the verification loop is the product.
 
 MIT © Stag.ai Ltd
 
+## Versioning
+
+`memfile: 1` in the frontmatter is the **format** version. It is deliberately
+not the package version: `@membook/spec` will ship patches and features that do
+not change the format at all, and an implementer pinning against the format
+should not have to track our release cadence to know whether their reader still
+works.
+
+**`memfile` ticks when a file written under the new spec would fail validation
+under the previous one.** Loosening a rule counts, because it is forward-
+incompatible even though it looks permissive: older readers reject the newly
+legal files. Adding an optional field does not count. Adding a new anchor
+`kind` or provenance `origin` does not count — that is why both carry an
+always-serialized discriminator.
+
+**Until the format is published, v1 is still being drafted** and is amended in
+place. That freedom ends at the first npm release; after it, the rule above is
+binding and no correction is worth silently breaking a reader over.
+
 ## The Memfile format
 
 A memory is one file — `<id>.mem.md` — with a YAML frontmatter machine layer and
@@ -54,7 +73,7 @@ normative contract. **All timestamps are strings.** It is what an external
 implementer targets, what a distillation provider emits, and what every write
 validates against.
 
-`memorySchema` is this implementation's *reader*. It additionally tolerates
+`memorySchema` is this implementation's _reader_. It additionally tolerates
 `Date` objects, because YAML 1.1 parsers (js-yaml, via gray-matter) silently
 coerce unquoted ISO timestamps into dates, and an author cannot see the
 difference between a quoted and unquoted timestamp in their own file.
@@ -64,7 +83,7 @@ That tolerance is **strictly one-directional**:
 - **Read:** a `Date` is accepted and normalized to a canonical string.
 - **Write:** a `Date` is rejected. It can never reach disk.
 
-A tool that *emits* real YAML timestamps is not spec-compliant, however forgiving
+A tool that _emits_ real YAML timestamps is not spec-compliant, however forgiving
 our reader happens to be.
 
 ### Timestamps are canonical UTC
@@ -86,26 +105,26 @@ exist** and governs `source_hash`; within `authored`, `author` says **who wrote
 it** and governs `agent` and `model`. Both are always serialized and lead the
 block, with no default, because defaulting would silently mean the wrong thing.
 
-| Shape | `session` | `agent` / `model` | `source_hash` |
-| --- | --- | --- | --- |
-| `distilled` | required | required | **required** — sha256 of the digest artifact the distiller consumed |
-| `authored` + `author: agent` | optional | required | forbidden |
-| `authored` + `author: human` | optional | **forbidden** | forbidden |
+| Shape                        | `session` | `agent` / `model` | `source_hash`                                                       |
+| ---------------------------- | --------- | ----------------- | ------------------------------------------------------------------- |
+| `distilled`                  | required  | required          | **required** — sha256 of the digest artifact the distiller consumed |
+| `authored` + `author: agent` | optional  | required          | forbidden                                                           |
+| `authored` + `author: human` | optional  | **forbidden**     | forbidden                                                           |
 
 Forbidden, not optional — and that is the whole point. Under an optional field,
 a hand-authored memory could carry a plausible-looking junk hash, or a person at
 a terminal could invent a model they never used; an unfalsifiable assertion
 dressed as provenance is worse for an auditor than no assertion at all. Because
-absence is *enforced*, **presence is meaningful**: no field can appear without a
+absence is _enforced_, **presence is meaningful**: no field can appear without a
 nameable referent behind it.
 
-The net effect is that an auditor can reconstruct *who wrote this, from what, in
-what context* purely from which fields exist. "A human ratified this into the
+The net effect is that an auditor can reconstruct _who wrote this, from what, in
+what context_ purely from which fields exist. "A human ratified this into the
 book" and "an agent asserted it" are different claims, and the format keeps them
 different.
 
 The digest artifact lives in `.membook/` runtime storage, which is not
-committed — so the audit claim is *locally* verifiable where the archive exists,
+committed — so the audit claim is _locally_ verifiable where the archive exists,
 and never globally. Provenance for an `authored` memory is the git history of
 the commit that introduced it.
 
@@ -196,18 +215,18 @@ if (!result.ok) quarantine(file, result.error.issues);
 
 ## Fields
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `memfile` | yes | Spec version literal, currently `1` |
-| `id` | yes | Content-addressed, `m-` + 4–12 lowercase hex |
-| `type` | yes | `decision` \| `gotcha` \| `convention` \| `map` \| `deadend` |
-| `status` | yes | `unverified` \| `verified` \| `stale` \| `invalidated` |
-| `scope` | yes | `repo` \| `user` \| `team` |
-| `confidence` | yes | `0`–`1` |
-| `created` | yes | Canonical UTC timestamp |
-| `verified` | conditional | Required unless `status` is `unverified` |
-| `anchors` | yes | At least one |
-| `provenance` | yes | `origin`, plus `author` when `authored`; remaining fields governed per the table above |
-| `supersedes` | no | Id of the memory this replaces |
+| Field        | Required    | Notes                                                                                  |
+| ------------ | ----------- | -------------------------------------------------------------------------------------- |
+| `memfile`    | yes         | Spec version literal, currently `1`                                                    |
+| `id`         | yes         | Content-addressed, `m-` + 4–12 lowercase hex                                           |
+| `type`       | yes         | `decision` \| `gotcha` \| `convention` \| `map` \| `deadend`                           |
+| `status`     | yes         | `unverified` \| `verified` \| `stale` \| `invalidated`                                 |
+| `scope`      | yes         | `repo` \| `user` \| `team`                                                             |
+| `confidence` | yes         | `0`–`1`                                                                                |
+| `created`    | yes         | Canonical UTC timestamp                                                                |
+| `verified`   | conditional | Required unless `status` is `unverified`                                               |
+| `anchors`    | yes         | At least one                                                                           |
+| `provenance` | yes         | `origin`, plus `author` when `authored`; remaining fields governed per the table above |
+| `supersedes` | no          | Id of the memory this replaces                                                         |
 
 Unknown fields are rejected.

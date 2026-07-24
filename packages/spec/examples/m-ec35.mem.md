@@ -6,7 +6,6 @@ status: stale
 scope: repo
 confidence: 0.8
 created: "2026-07-18T15:20:00Z"
-verified: "2026-07-23T09:12:00Z"
 anchors:
   - kind: git
     path: packages/core/src/git/log.ts

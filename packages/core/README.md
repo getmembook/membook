@@ -123,6 +123,56 @@ const report = await membook.verify({ rechecker: new ClaudeRechecker() });
 await membook.verify({ dryRun: true }); // report without writing
 ```
 
+## The compiled book
+
+`MEMBOOK.md` at the repository root: what an agent should know before touching
+anything. Plain markdown at a conventional path, so agents that have never
+heard of Membook still benefit — the bargain AGENTS.md made.
+
+```ts
+const report = await membook.writeBook();
+```
+
+**Selection differs from `recall` in kind, not degree.** Recall has a query and
+can gate on relevance to it. The book has no query, so nothing _can_ gate on
+relevance — ranking is prior expected value instead, and the **cap is the
+discipline**: every memory included pushes another out.
+
+| Signal     | Role                                                                             |
+| ---------- | -------------------------------------------------------------------------------- |
+| status     | weights (`verified` > `unverified`); `stale` and `invalidated` excluded outright |
+| type       | `gotcha` and `deadend` rank highest — not knowing them causes active wrong turns |
+| confidence | weights                                                                          |
+| recency    | modulates only                                                                   |
+| size       | value is divided by tokens, so density wins                                      |
+
+Status **weights rather than gates** on purpose. A young book is honestly
+all-unverified — no verify pass has run yet — so gating on `verified` would
+emit an empty book for exactly the repositories that most need one. Stale and
+invalidated are excluded outright, because the book is asserted with no room
+to caveat.
+
+Selection is greedy on value-per-token under a hard **2,000-token cap**, and it
+keeps scanning past an entry too large to fit, so one long memory cannot shut
+out the short ones behind it. It stops early rather than padding.
+
+### Byte-identical for identical state
+
+The book is committed _and_ prepended to every session, so unstable output
+means noisy pull-request diffs on a file nobody edited and a prompt-cache miss
+on every start. Ordering is deterministic, ties break by content-addressed id,
+and the same book state always produces the same bytes.
+
+### The header is load-bearing
+
+It must explain itself to a reader who has never heard of Membook, say that
+editing is pointless and where to make changes instead, and — hardest — state
+exactly how far to trust the contents.
+
+It reports **withheld-as-drifted separately from omitted-for-space**. Blurring
+them into one count would tell the reader that the missing memories were less
+useful, when in truth they were no longer trustworthy: the opposite lesson.
+
 ## The write-path seam
 
 Every write passes through configured `WriteGuard`s before touching disk. A

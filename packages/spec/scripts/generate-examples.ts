@@ -12,7 +12,11 @@ import { serializeMemfile } from "../src/serialize.js";
 import { computeMemoryId, memoryFilename } from "../src/id.js";
 import type { MemoryInput } from "../src/schema.js";
 
-const EXAMPLES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "examples");
+const EXAMPLES_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "examples"
+);
 
 const COMMIT_A = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
 const COMMIT_B = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b";
@@ -159,14 +163,14 @@ const examples: Example[] = [
     frontmatter: {
       memfile: 1,
       type: "deadend",
+      // Stale, and never verified: written, then the anchored code changed
+      // before anything checked it. No `verified` timestamp exists, because
+      // no verification ever happened — absence is the honest record.
       status: "stale",
       scope: "repo",
       confidence: 0.8,
       created: "2026-07-18T15:20:00Z",
-      verified: "2026-07-23T09:12:00Z",
-      anchors: [
-        { path: "packages/core/src/git/log.ts", commit: COMMIT_B },
-      ],
+      anchors: [{ path: "packages/core/src/git/log.ts", commit: COMMIT_B }],
       // An agent writing directly rather than distilling: it knows what it
       // is, so `agent` and `model` are required and truthfully filled.
       provenance: {

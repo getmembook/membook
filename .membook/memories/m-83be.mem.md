@@ -2,7 +2,7 @@
 memfile: 1
 id: m-83be
 type: decision
-status: verified
+status: stale
 scope: repo
 confidence: 1
 created: "2026-07-24T00:54:10Z"

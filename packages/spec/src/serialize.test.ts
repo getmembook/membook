@@ -57,6 +57,19 @@ describe("golden examples", () => {
     );
   });
 
+  it("ships a golden fixture for a stale memory that was never verified", () => {
+    const found = files.some((f) => {
+      const { frontmatter } = parseMemfile(
+        readFileSync(join(EXAMPLES_DIR, f), "utf8"),
+        f
+      );
+      return (
+        frontmatter.status !== "verified" && frontmatter.verified === undefined
+      );
+    });
+    expect(found).toBe(true);
+  });
+
   it("ships a golden fixture for all three provenance shapes", () => {
     const shapes = files.map((f) => {
       const { provenance } = parseMemfile(

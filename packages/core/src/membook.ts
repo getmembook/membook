@@ -15,6 +15,7 @@ import {
 import { search, type SearchHit, type SearchOptions } from "./search.js";
 import { verifyPass, type VerifyOptions, type VerifyReport } from "./verify.js";
 import { recall, type RecallOptions, type RecallResult } from "./recall.js";
+import { compileBook, writeBook, type BookReport } from "./book.js";
 import type { QuarantineRecord } from "./errors.js";
 
 export interface MembookOptions extends MemoryStoreOptions {}
@@ -142,6 +143,16 @@ export class Membook {
     const report = await verifyPass(this.paths.root, this.store, options);
     if (!report.dryRun && report.changed.length > 0) await this.reindex();
     return report;
+  }
+
+  /** Compile the boot pack without writing it. */
+  async compileBook(options: { now?: Date } = {}): Promise<BookReport> {
+    return compileBook(this.store, options);
+  }
+
+  /** Compile the boot pack and write `MEMBOOK.md`. */
+  async writeBook(options: { now?: Date } = {}): Promise<BookReport> {
+    return writeBook(this.paths, this.store, options);
   }
 
   async status(): Promise<StatusReport> {

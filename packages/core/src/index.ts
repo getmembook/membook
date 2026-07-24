@@ -41,6 +41,15 @@ export {
   type SearchOptions,
 } from "./search.js";
 export {
+  compileBook,
+  writeBook,
+  expectedValue,
+  estimateTokens,
+  BOOK,
+  type BookReport,
+  type BookEntry,
+} from "./book.js";
+export {
   recall,
   pathAffinity,
   RANKING,
