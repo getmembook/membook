@@ -87,7 +87,7 @@ describe("GATE: delete DB → reindex → identical retrieval", () => {
         await writeFile(
           join(second.paths.memories, file),
           await readFile(join(membook.paths.memories, file), "utf8"),
-          "utf8",
+          "utf8"
         );
       }
       await second.reindex();
@@ -106,7 +106,7 @@ describe("malformed files", () => {
     await writeFile(
       join(membook.paths.memories, victim),
       "---\nmemfile: 1\nstatus: nonsense\n---\n\nBroken.\n",
-      "utf8",
+      "utf8"
     );
 
     const result = await membook.reindex();
@@ -161,7 +161,13 @@ describe("pinned index metadata", () => {
     }
   });
 
-  it.each(["tokenizer", "spec_version", "schema_version", "embedding_model", "embedding_dims"])(
+  it.each([
+    "tokenizer",
+    "spec_version",
+    "schema_version",
+    "embedding_model",
+    "embedding_dims",
+  ])(
     "fails loudly when %s drifts, rather than mixing assumptions",
     async (key) => {
       const membook = await seeded(root);
@@ -169,16 +175,23 @@ describe("pinned index metadata", () => {
       db.prepare("UPDATE meta SET value = ? WHERE key = ?").run("drifted", key);
       db.close();
 
-      expect(() => openIndex(membook.paths.indexFile)).toThrow(IndexMetadataMismatchError);
-      expect(() => openIndex(membook.paths.indexFile)).toThrow(/membook reindex/);
-    },
+      expect(() => openIndex(membook.paths.indexFile)).toThrow(
+        IndexMetadataMismatchError
+      );
+      expect(() => openIndex(membook.paths.indexFile)).toThrow(
+        /membook reindex/
+      );
+    }
   );
 
   it("names every drifted key in the error", async () => {
     const membook = await seeded(root);
     const db = openIndex(membook.paths.indexFile);
     db.prepare("UPDATE meta SET value = ? WHERE key = ?").run("x", "tokenizer");
-    db.prepare("UPDATE meta SET value = ? WHERE key = ?").run("y", "embedding_model");
+    db.prepare("UPDATE meta SET value = ? WHERE key = ?").run(
+      "y",
+      "embedding_model"
+    );
     db.close();
 
     try {
@@ -193,14 +206,56 @@ describe("pinned index metadata", () => {
     }
   });
 
+  /**
+   * The mismatch throw used to LEAK the database handle. Invisible on POSIX,
+   * which happily unlinks open files — but on Windows the leaked handle made
+   * the index undeletable, so `membook reindex`, whose remedy for drift is
+   * deleting the file, failed with EBUSY. The error path blocked its own
+   * cure. Found by the advisory Windows CI job, not by any test here: this
+   * assertion is strict only on Windows, and that job is where it bites.
+   */
+  it("closes the handle when it throws, so the file stays deletable", async () => {
+    const membook = await seeded(root);
+    const db = openIndex(membook.paths.indexFile);
+    db.prepare("UPDATE meta SET value = ? WHERE key = ?").run(
+      "drifted",
+      "tokenizer"
+    );
+    db.close();
+
+    expect(() => openIndex(membook.paths.indexFile)).toThrow(
+      IndexMetadataMismatchError
+    );
+
+    // Deleting is the assertion: this is exactly what reindex() does to heal.
+    await rm(membook.paths.indexFile);
+    await rm(`${membook.paths.indexFile}-wal`, { force: true });
+    await rm(`${membook.paths.indexFile}-shm`, { force: true });
+
+    // And the store must be freshly creatable afterwards.
+    const fresh = openIndex(membook.paths.indexFile);
+    try {
+      expect(readMetadata(fresh)).toEqual({ ...INDEX_METADATA });
+    } finally {
+      fresh.close();
+    }
+  });
+
   it("recovers by rebuilding, since the index is disposable", async () => {
     const membook = await seeded(root);
     const db = openIndex(membook.paths.indexFile);
-    db.prepare("UPDATE meta SET value = ? WHERE key = ?").run("drifted", "tokenizer");
+    db.prepare("UPDATE meta SET value = ? WHERE key = ?").run(
+      "drifted",
+      "tokenizer"
+    );
     db.close();
 
-    expect(() => openIndex(membook.paths.indexFile)).toThrow(IndexMetadataMismatchError);
-    await expect(membook.reindex()).resolves.toMatchObject({ indexed: CORPUS.length });
+    expect(() => openIndex(membook.paths.indexFile)).toThrow(
+      IndexMetadataMismatchError
+    );
+    await expect(membook.reindex()).resolves.toMatchObject({
+      indexed: CORPUS.length,
+    });
     await expect(membook.search("sqlite")).resolves.not.toHaveLength(0);
   });
 });
