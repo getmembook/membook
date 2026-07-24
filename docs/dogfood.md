@@ -65,12 +65,44 @@ drained piped stdin before the first prompt.
 failure presented as success. Recorded as `m-d394`: every injectable boundary
 needs at least one test through the real thing.
 
+### 2026-07-24 — first live re-check: no verdicts, but the failure path held
+
+**What happened.** Ran `membook verify --recheck` with a real key against the
+three stale founding memories. (The earlier entry said four; a verify pass in
+between promoted one, so it was three. Corrected forward rather than edited,
+because a log rewritten for tidiness is the same instinct as a header softened
+for marketing.)
+
+**What the tool did.** Two bugs first, both found by running it rather than by
+any test:
+
+1. `recheckerFromEnv` never passed instrumentation to the `LlmRechecker`, so
+   verdicts went to a `NullInstrumentation`. Re-check accuracy — the single
+   number that seam exists to make measurable — was silently not recorded.
+2. A `still-stale` verdict does not change status, so it landed in
+   `unchanged` and the CLI printed _"nothing changed"_. That folds "we asked
+   and were told no" together with "we never asked", which are different
+   facts about how much is known. Same family as the `MEMBOOK.md` header bug.
+
+With both fixed, the re-check ran and the API refused it: the account has no
+credit balance. Every memory stayed stale, each with the reason naming the
+cause, and the telemetry recorded three `failed: true` verdicts attributed to
+`llm:anthropic:claude-sonnet-5`.
+
+**What annoyed me.** No calibration data — the model was never reached, so we
+still do not know whether the skeptic can recognise affirmative evidence. That
+needs a funded account.
+
+**What it got right.** This was the first live exercise of the provider-failure
+path, and it behaved exactly as specified: an unreachable model is not evidence
+of anything, so nothing was restored and nothing was assumed. The dangerous
+outcome here was a false restore on an API error, and it did not happen.
+
 ### Pending
 
-- [ ] **First live re-check.** Four memories are stale whose ground truth we
-      know: they are still true. Run
-      `ANTHROPIC_API_KEY=… membook verify --recheck`, record every verdict,
-      then regenerate the book and read the header. Four `restore` verdicts
-      means the skeptic can recognise affirmative evidence; any `still-stale`
-      is prompt-calibration data, not failure — the bias was specified, so a
-      conservative miss on first contact is the system erring as instructed.
+- [ ] **Calibration read.** Re-run `verify --recheck` on a funded account. The
+      three memories are known-true, so three `restore` verdicts means the
+      skeptic recognises affirmative evidence; any `still-stale` is
+      prompt-calibration data, not failure — the bias was specified, so a
+      conservative miss is the system erring as instructed. Then regenerate
+      the book and capture the header verbatim.

@@ -12,6 +12,7 @@ import {
   isGitRepository,
   type AnchorRechecker,
   type ModelProvider,
+  type Instrumentation,
 } from "@membook/core";
 import {
   bad,
@@ -106,7 +107,10 @@ export async function book(options: CommonOptions): Promise<void> {
 }
 
 /** Build a re-checker from the environment, or explain why it cannot. */
-export function recheckerFromEnv(root: string): AnchorRechecker | null {
+export function recheckerFromEnv(
+  root: string,
+  instrumentation?: Instrumentation
+): AnchorRechecker | null {
   let provider: ModelProvider | null = null;
 
   if (process.env["ANTHROPIC_API_KEY"]) {
@@ -132,6 +136,10 @@ export function recheckerFromEnv(root: string): AnchorRechecker | null {
 
   return new LlmRechecker({
     provider,
+    // Without this the verdicts go to a NullInstrumentation, and re-checker
+    // accuracy — the one number this seam exists to make measurable — is
+    // silently not recorded.
+    ...(instrumentation ? { instrumentation } : {}),
     readAnchor: async (path) => {
       try {
         return await readFile(join(root, path), "utf8");
@@ -170,7 +178,7 @@ export async function verify(options: VerifyOptions): Promise<void> {
 
   let rechecker: AnchorRechecker | null = null;
   if (options.recheck) {
-    rechecker = recheckerFromEnv(options.root);
+    rechecker = recheckerFromEnv(options.root, membook.instrumentation);
     if (!rechecker) {
       die(
         "No model configured for re-checking.",
@@ -184,8 +192,16 @@ export async function verify(options: VerifyOptions): Promise<void> {
     ...(rechecker ? { rechecker } : {}),
   });
 
+  // A memory re-checked and returned `still-stale` did not change status, so
+  // it lands in `unchanged`. Reporting that as "nothing changed" would fold
+  // "we asked and were told no" together with "we never asked" — different
+  // facts about how much is actually known.
+  const rechecked = [...report.changed, ...report.unchanged].filter(
+    (v) => v.rechecked
+  );
+
   log("");
-  if (report.changed.length === 0) {
+  if (report.changed.length === 0 && rechecked.length === 0) {
     log(
       ok(
         `Checked ${report.checked} against ${report.head.slice(
@@ -194,6 +210,29 @@ export async function verify(options: VerifyOptions): Promise<void> {
         )} — nothing changed.`
       )
     );
+    log("");
+    return;
+  }
+
+  if (rechecked.length > 0) {
+    log(
+      heading(
+        `${rechecked.length} re-checked against ${report.head.slice(0, 7)}`
+      )
+    );
+    for (const v of rechecked) {
+      const verdict =
+        v.to === v.from
+          ? `${statusLabel(v.to)} ${dim("(unchanged)")}`
+          : `${statusLabel(v.from)} → ${statusLabel(v.to)}`;
+      log(`  ${v.id}  ${verdict}`);
+      log(wrap(v.reason, 74, "        "));
+    }
+    log("");
+  }
+
+  if (report.changed.length === 0) {
+    log(dim("  No status changed."));
     log("");
     return;
   }
