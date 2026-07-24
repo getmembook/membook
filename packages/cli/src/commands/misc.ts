@@ -9,6 +9,7 @@ import {
   SecretScanGuard,
   changesSince,
   headSha,
+  findMissingAnchorPaths,
   isGitRepository,
   type AnchorRechecker,
   type ModelProvider,
@@ -349,6 +350,16 @@ export async function remember(options: RememberOptions): Promise<void> {
   });
 
   const commit = await headSha(options.root);
+
+  // A memory anchored to a path absent from its own commit can never be
+  // verified; the usual cause is a file that has not been committed yet.
+  const missing = await findMissingAnchorPaths(options.root, commit, options.paths);
+  if (missing.length > 0) {
+    die(
+      `${missing.join(", ")} ${missing.length === 1 ? "does" : "do"} not exist at HEAD (${commit.slice(0, 7)}).`,
+      "Commit the file first, or anchor to a path that is already committed — a memory anchored to an uncommitted file cannot be verified."
+    );
+  }
   const id = await membook.store.allocateId(options.statement);
 
   const frontmatter: MemoryInput = {

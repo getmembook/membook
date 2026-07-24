@@ -10,8 +10,9 @@ Every memory is anchored to specific files. Anything whose anchored code has
 changed since it was last checked is withheld from this file rather than
 asserted.
 
-It carries all 7 eligible memories. This file is generated, never edited by
-hand — corrections belong in `.membook/memories/`.
+It carries all 6 eligible memories. 4 further memories are withheld because
+the code they describe has changed since they were last checked. This file is
+generated, never edited by hand — corrections belong in `.membook/memories/`.
 
 Entries marked `(unverified)` have not been checked against current code yet.
 Treat them as informed leads rather than established fact.
@@ -46,12 +47,6 @@ v1 files already handles the discriminator. Leading with it makes anchor diffs
 scannable in PR review.
 
 `packages/spec/src/schema.ts#gitAnchorSchema`, `packages/spec/src/serialize.ts#ANCHOR_KEY_ORDER`
-
-### convention
-
-Every injectable boundary needs at least one test through the real thing. Injecting a dependency to make a unit test easy also makes the suite structurally unable to exercise the path that ships, and the resulting failure is silent success rather than an error. Proven twice here: the in-memory MCP transport hid nothing only because a stdio test spawned the real binary, and an injected `ask` hid a readline that drained piped stdin during setup and discarded the human's answer while reporting success.
-
-`packages/cli/src/commands/review.ts`, `packages/cli/src/cli.test.ts`, `packages/mcp/src/server.test.ts`
 
 ### decision
 

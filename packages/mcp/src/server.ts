@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   Membook,
   headSha,
+  findMissingAnchorPaths,
   isGitRepository,
   type RecallHit,
   SecretScanGuard,
@@ -209,6 +210,28 @@ export function createServer(options: CreateServerOptions): McpServer {
       }
 
       const commit = await headSha(root);
+
+      // A memory anchored to a path that does not exist at its own commit can
+      // never be verified. The usual cause is an uncommitted file: the agent
+      // just created it, so it is absent from HEAD. Refuse now rather than
+      // let the next verify pass report it long after this session ended.
+      const missing = await findMissingAnchorPaths(root, commit, paths);
+      if (missing.length > 0) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `Not remembered: ${missing.join(", ")} ${
+                  missing.length === 1 ? "does" : "do"
+                } not exist at HEAD (${commit.slice(0, 7)}).\n` +
+                "Commit the file first, or anchor to a path that is already committed — a memory anchored to an uncommitted file cannot be verified.",
+            },
+          ],
+        };
+      }
+
       const id = await membook.store.allocateId(statement);
       const timestamp = `${now().toISOString().slice(0, 19)}Z`;
 

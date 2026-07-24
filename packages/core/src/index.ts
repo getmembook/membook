@@ -116,6 +116,7 @@ export {
   changesSince,
   followRename,
   pathExistsAt,
+  findMissingAnchorPaths,
   showFile,
   GitError,
   NotAGitRepositoryError,

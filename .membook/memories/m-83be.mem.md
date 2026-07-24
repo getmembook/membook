@@ -6,16 +6,16 @@ status: verified
 scope: repo
 confidence: 1
 created: "2026-07-24T00:54:10Z"
-verified: "2026-07-24T11:54:15Z"
+verified: "2026-07-24T14:23:26Z"
 anchors:
   - kind: git
     path: packages/spec/src/schema.ts
     symbol: CANONICAL_TIMESTAMP_RE
-    commit: 5e422a2a97bbb534918879feceb9d4db9ecac7af
+    commit: 4176c65f65262d4556726c270b0614b77623ca1b
   - kind: git
     path: packages/spec/src/serialize.ts
     symbol: TIMESTAMP_KEYS
-    commit: 5e422a2a97bbb534918879feceb9d4db9ecac7af
+    commit: 4176c65f65262d4556726c270b0614b77623ca1b
 provenance:
   origin: authored
   author: agent

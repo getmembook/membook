@@ -139,6 +139,30 @@ export async function changesSince(
 }
 
 /** True if the path exists in the given tree. */
+/**
+ * Reject anchors pointing at paths that do not exist at their own commit.
+ *
+ * This is the most common way to create a broken memory, and it is invisible
+ * at the moment it happens: an agent creates a file, records a memory about
+ * it, and anchors to HEAD — where the file does not exist yet, because it has
+ * not been committed. The memory is born unverifiable, and the next verify
+ * pass reports it as such long after the session that caused it has ended.
+ *
+ * Refusing at write time turns a silent future failure into an immediate,
+ * actionable one.
+ */
+export async function findMissingAnchorPaths(
+  cwd: string,
+  commit: string,
+  paths: readonly string[]
+): Promise<string[]> {
+  const missing: string[] = [];
+  for (const path of paths) {
+    if (!(await pathExistsAt(cwd, commit, path))) missing.push(path);
+  }
+  return missing;
+}
+
 export async function pathExistsAt(
   cwd: string,
   sha: string,

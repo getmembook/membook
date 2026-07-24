@@ -130,8 +130,7 @@ describe("remember", () => {
     const result = await client.callTool({
       name: "remember",
       arguments: {
-        statement:
-          `Publish releases with ${F.githubToken} from CI.`,
+        statement: `Publish releases with ${F.githubToken} from CI.`,
         type: "gotcha",
         paths: ["src/auth.ts"],
       },
@@ -141,6 +140,31 @@ describe("remember", () => {
     expect(text).toMatch(/secret-scan|GitHub token/);
     // And it must not echo the credential back into logs or transcripts.
     expect(text).not.toContain(F.githubToken);
+  });
+
+  // The most common agent workflow: create a file, record what you learned,
+  // before committing. Anchoring to HEAD there produces a memory that can
+  // never be verified, so it must fail now rather than a session later.
+  it("refuses to anchor to a file that is not committed", async () => {
+    await writeFile(
+      join(root, "src/uncommitted.ts"),
+      "export const x = 1;\n",
+      "utf8"
+    );
+
+    const result = await client.callTool({
+      name: "remember",
+      arguments: {
+        statement: "Something about a file that has not been committed yet.",
+        type: "gotcha",
+        paths: ["src/uncommitted.ts"],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const text = (result.content as Array<{ text?: string }>)[0]!.text!;
+    expect(text).toContain("does not exist at HEAD");
+    expect(text).toMatch(/Commit the file first/);
   });
 
   it("reports a rejected write rather than failing silently", async () => {

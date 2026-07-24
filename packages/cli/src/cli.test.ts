@@ -192,6 +192,55 @@ describe("remember", () => {
     expect(flat()).toContain("nothing has checked it");
   });
 
+  /**
+   * Found by dogfooding: three memories were written about a doc that had not
+   * been committed yet, and every one was invalidated by the next verify pass.
+   * This is the most common agent workflow — create a file, record what you
+   * learned, before committing — so it has to fail loudly at write time
+   * rather than quietly a session later.
+   */
+  it("refuses to anchor to a file that does not exist at HEAD", async () => {
+    await init({ root, log });
+    await writeFile(
+      join(root, "src/uncommitted.ts"),
+      "export const x = 1;\n",
+      "utf8"
+    );
+    lines = [];
+
+    await expect(
+      remember({
+        root,
+        statement: "Something about a file that has not been committed.",
+        type: "gotcha",
+        paths: ["src/uncommitted.ts"],
+        log,
+      })
+    ).rejects.toThrow();
+
+    expect(await new Membook(root).store.listIds()).toHaveLength(0);
+  });
+
+  it("accepts the same path once it is committed", async () => {
+    await init({ root, log });
+    await writeFile(
+      join(root, "src/now-committed.ts"),
+      "export const x = 1;\n",
+      "utf8"
+    );
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "add file"]);
+
+    await remember({
+      root,
+      statement: "Something about a file that is committed.",
+      type: "gotcha",
+      paths: ["src/now-committed.ts"],
+      log,
+    });
+    expect(await new Membook(root).store.listIds()).toHaveLength(1);
+  });
+
   it("blocks a credential and does not write it", async () => {
     await init({ root, log });
     const { FAKE_SECRETS } = await import("@membook/core");

@@ -38,7 +38,7 @@ prompts/          versioned model-facing prompts (reviewed like code)
 
 [CLAUDE.md](./CLAUDE.md) is the build context: architecture decisions, the v0.1
 build order, and what is explicitly out of scope. Read it before proposing
-design changes — several decisions are marked *do not relitigate*, and they
+design changes — several decisions are marked _do not relitigate_, and they
 carry that label because they were settled with reasons written down.
 
 ## What we are looking for
@@ -64,7 +64,7 @@ and argue for it rather than editing the assertion.
 **Failures must be loud.** Never silently skip a malformed memory. Quarantine
 it, report it, and surface it in `status`. Errors carry actionable messages.
 
-**Validate at the boundary.** Memories validate on read *and* on write. Writes
+**Validate at the boundary.** Memories validate on read _and_ on write. Writes
 go through the wire schema, so malformed state cannot reach disk.
 
 **Determinism is not a nicety.** Memories live in git and get reviewed in pull
@@ -103,12 +103,17 @@ Changes to published packages need a [changeset](https://github.com/changesets/c
 pnpm changeset
 ```
 
+Publishing itself is documented in [docs/releasing.md](./docs/releasing.md).
+Read it before releasing anything — there is no release workflow yet, and the
+process has several traps that produce misleading errors, including one that
+ships a package whose binary silently never links.
+
 ## Code style
 
 Formatting is not hand-managed — match the surrounding file. TypeScript strict,
 ESM only.
 
-Comments should explain *why*, especially where the obvious approach was
+Comments should explain _why_, especially where the obvious approach was
 rejected. Do not narrate what the code plainly does.
 
 Vocabulary matters and is used consistently: **memory** (the record), **anchor**,
