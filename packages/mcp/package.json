@@ -1,12 +1,12 @@
 {
   "name": "@membook/mcp",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "description": "Membook MCP server — serves verified memories to coding agents over stdio",
   "license": "MIT",
   "author": "Stag.ai Ltd",
   "repository": {
     "type": "git",
-    "url": "https://github.com/getmembook/membook",
+    "url": "git+https://github.com/getmembook/membook.git",
     "directory": "packages/mcp"
   },
   "homepage": "https://github.com/getmembook/membook",

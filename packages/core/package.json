@@ -1,12 +1,12 @@
 {
   "name": "@membook/core",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "description": "Membook engine — store, index, retrieve. Files are the truth; the database is a cache.",
   "license": "MIT",
   "author": "Stag.ai Ltd",
   "repository": {
     "type": "git",
-    "url": "https://github.com/getmembook/membook",
+    "url": "git+https://github.com/getmembook/membook.git",
     "directory": "packages/core"
   },
   "type": "module",
