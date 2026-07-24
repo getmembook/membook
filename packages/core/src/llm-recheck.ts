@@ -55,10 +55,29 @@ export function quoteAppearsIn(haystack: string, quote: string): boolean {
 }
 
 /** Maps the model's vocabulary onto memory statuses. */
+/**
+ * A MODEL MAY FAIL TO RESTORE. IT MAY NOT DESTROY.
+ *
+ * `restore` requires verbatim evidence that is string-matched against the
+ * anchored file, because a rubber-stamping model must not launder a stale
+ * memory into `verified`. `invalidate` had no such guard — it was taken on
+ * the model's word, and the model's word failed on its first live outing: a
+ * 3B invalidated "publish with pnpm, never npm" (still true) because a
+ * version number in the anchored package.json changed. Same rubber-stamp
+ * risk as a false restore, opposite direction, and it silently deletes true
+ * knowledge from the book.
+ *
+ * So a model's `invalidate` now lands as `stale`: withheld from the book,
+ * flagged for a human, destroyed by nobody. `invalidated` remains reachable
+ * only by deterministic evidence (the anchored file is gone — verify.ts) or
+ * by a human in `review`. The verdict token is still accepted and still
+ * logged, so instrumentation records what the model *wanted* to do — that
+ * disagreement between verdict and status is itself the measurement.
+ */
 const TO_STATUS: Record<(typeof VERDICTS)[number], RecheckVerdict> = {
   restore: "verified",
   "still-stale": "stale",
-  invalidate: "invalidated",
+  invalidate: "stale",
 };
 
 const SYSTEM = [

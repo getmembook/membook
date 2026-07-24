@@ -131,13 +131,24 @@ describe("well-formed verdicts", () => {
     expect((await rechecker.recheck(REQUEST)).verdict).toBe("stale");
   });
 
-  it("invalidates on invalidate", async () => {
+  /**
+   * A model's `invalidate` lands as STALE, not invalidated.
+   *
+   * Measured on this repo's own memories: the first live invalidate verdict
+   * was a 3B destroying "publish with pnpm, never npm" — still true — because
+   * a version number changed in the anchored package.json. Restore requires
+   * grounded evidence precisely so a rubber-stamp cannot assert falsehoods;
+   * letting the same model destroy truths on its bare word was the identical
+   * hole in the other direction. `invalidated` is now reachable only through
+   * deterministic evidence (anchored file deleted) or a human in review.
+   */
+  it("demotes a model invalidate to stale — models may not destroy", async () => {
     const rechecker = new LlmRechecker({
       provider: providerReplying(
         '{"verdict": "invalidate", "reason": "the timer-based refresh replaced the boundary check"}'
       ),
     });
-    expect((await rechecker.recheck(REQUEST)).verdict).toBe("invalidated");
+    expect((await rechecker.recheck(REQUEST)).verdict).toBe("stale");
   });
 
   it("unwraps a fenced JSON reply rather than spending a repair on formatting", async () => {
@@ -246,13 +257,16 @@ describe("INVARIANT: a restore must cite evidence that really exists", () => {
     expect(r.verdict).toBe("stale");
   });
 
-  it("does not require evidence to stay stale or to invalidate", async () => {
+  it("needs no evidence for the verdicts that cannot destroy or assert", async () => {
     expect(
       (await withCode(grounded("still-stale")).recheck(REQUEST)).verdict
     ).toBe("stale");
+    // Even WITH plausible evidence attached, invalidate lands as stale: there
+    // is no string a model can produce that proves a memory false the way a
+    // verbatim quote proves code present.
     expect(
       (await withCode(grounded("invalidate")).recheck(REQUEST)).verdict
-    ).toBe("invalidated");
+    ).toBe("stale");
   });
 });
 

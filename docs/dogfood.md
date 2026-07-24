@@ -481,3 +481,38 @@ is a better-designed guess.
       evidence" turned out to be false. Three restores arrived on reasoning
       that recognised nothing, which is why the pending item above measures
       reasons rather than counting verdicts.
+
+### 2026-07-24 — the model's first live invalidate destroyed a true memory
+
+**What happened.** Ran `verify --recheck` on this repo's own store after the
+release-day churn — 4 genuinely stale memories, real drift. Two results.
+
+The grounded-restore defense worked in the wild: the 3B tried to restore
+`m-d394` citing "evidence" that was actually a file path, the string-match
+rejected it, and the memory stayed stale. The defense built against
+rubber-stamping caught a rubber-stamp on its first live attempt.
+
+And the model invalidated `m-cbc0` — "publish with pnpm, never npm" — with the
+reason "no longer true with the updated package.json." The memory is still
+true. All that changed in the anchored file was the version number, bumped by
+the release. A weak model destroyed a true memory over an irrelevant diff.
+
+**The finding.** `restore` requires verbatim grounded evidence precisely so a
+rubber-stamp cannot launder falsehoods into `verified`. `invalidate` had no
+guard at all — taken on the model's bare word. Same failure mode, opposite
+direction, and arguably worse: a false restore asserts one wrong thing, a
+false invalidate silently deletes a true thing from the book, and nothing in
+the product would ever mention it again unless a human happened to open
+`review`.
+
+**The fix.** A model may fail to restore; it may not destroy. Model
+`invalidate` verdicts now land as `stale` — withheld, flagged, recoverable.
+`invalidated` is reachable only through deterministic evidence (the anchored
+file is gone) or a human decision in `review`. The verdict token is still
+logged, so the gap between what models *want* to destroy and what deserves
+destroying is itself now a measurable number.
+
+**Worth noting.** Every layer of this came from dogfooding on real drift:
+fixture tests passed throughout, the calibration harness had even blessed
+model-invalidates as acceptable. The policy was wrong, not the code, and only
+live data could say so.
