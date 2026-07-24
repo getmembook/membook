@@ -14,6 +14,16 @@ updates:
       production-dependencies:
         dependency-type: production
         update-types: ["minor", "patch"]
+    # Majors that would raise the Node floor are refused on sight, so letting
+    # Dependabot reopen them costs a full CI matrix to reject a decision that
+    # was already made. execa 10 and better-sqlite3 13 both require Node >=22;
+    # this repo supports 20, and a support-policy change must be a deliberate
+    # commit rather than a side effect of a dependency bump.
+    ignore:
+      - dependency-name: execa
+        update-types: ["version-update:semver-major"]
+      - dependency-name: better-sqlite3
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore"
       include: scope
