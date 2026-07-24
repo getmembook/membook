@@ -128,3 +128,22 @@ Do not open a public issue. See [SECURITY.md](./SECURITY.md).
 
 By contributing, you agree that your contributions are licensed under the MIT
 License, consistent with the rest of the project.
+
+## Signed commits
+
+`main` requires signed commits. Sign with SSH — no GPG setup needed:
+
+```bash
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+```
+
+Then register that key on GitHub as a **signing** key. This is a separate list
+from your authentication keys, and skipping it is the usual reason commits show
+as *Unverified* while `git log --show-signature` says the signature is good:
+
+```bash
+gh auth refresh -h github.com -s admin:ssh_signing_key
+gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "commit signing"
+```
