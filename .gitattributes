@@ -1,0 +1,19 @@
+# Line endings are normalised to LF on checkout, on every platform.
+#
+# This is not a style preference. Memfiles and the compiled book are
+# byte-exact by specification: `serialize(parse(x))` must reproduce `x`
+# exactly, and the round-trip invariant compares bytes. A CRLF checkout
+# breaks that guarantee on real user files, not merely in tests — which is
+# precisely how it was found, once a dependency bump let Windows CI get far
+# enough to run the suite.
+* text=auto eol=lf
+
+# Stated explicitly for the files the guarantee is actually about, so the
+# reason survives someone later relaxing the blanket rule above.
+*.mem.md text eol=lf
+MEMBOOK.md text eol=lf
+
+# Binary, never normalised.
+*.png binary
+*.jpg binary
+*.db binary

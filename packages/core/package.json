@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@membook/spec": "workspace:*",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.11.1",
     "execa": "^9.6.1",
     "zod": "^4"
   },
