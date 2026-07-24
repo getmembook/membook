@@ -79,21 +79,23 @@ export const gitAnchorSchema = z
 export const anchorSchema = gitAnchorSchema;
 
 export const PROVENANCE_ORIGINS = ["distilled", "authored"] as const;
+export const PROVENANCE_AUTHORS = ["human", "agent"] as const;
 
-const provenanceBase = {
-  session: z.string().min(1),
-  agent: z.string().min(1),
-  model: z.string().min(1),
-};
+const sessionId = z.string().min(1);
+const agentName = z.string().min(1);
+const modelName = z.string().min(1);
 
 /**
  * Distilled from a session: `source_hash` is REQUIRED, and is the sha256 of
- * the exact digest artifact the distiller consumed.
+ * the exact digest artifact the distiller consumed. A distillation always
+ * runs inside a session, with an agent and a model, so all are required.
  */
 export const distilledProvenanceSchema = z
   .object({
     origin: z.literal("distilled"),
-    ...provenanceBase,
+    session: sessionId,
+    agent: agentName,
+    model: modelName,
     source_hash: z
       .string()
       .regex(/^[0-9a-f]{64}$/, "source_hash must be a sha256 hex digest"),
@@ -101,26 +103,53 @@ export const distilledProvenanceSchema = z
   .strict();
 
 /**
- * Written by hand: `source_hash` is FORBIDDEN, not optional. Provenance here
- * is the git history of the commit that introduced the memory.
+ * Authored by an agent: it knows what it is, and saying so is auditable.
+ * `session` is optional — an agent may write outside a session context.
  */
-export const authoredProvenanceSchema = z
+export const agentAuthoredProvenanceSchema = z
   .object({
     origin: z.literal("authored"),
-    ...provenanceBase,
+    author: z.literal("agent"),
+    session: sessionId.optional(),
+    agent: agentName,
+    model: modelName,
   })
-  // .strict() is what forbids `source_hash` here: an unrecognized key on an
-  // authored memory is a validation failure, not a field to ignore.
   .strict();
 
 /**
- * `origin` governs `source_hash` so that the field's PRESENCE is meaningful:
- * if a memory carries a hash, a nameable artifact stands behind it, full stop.
- * A plausible-looking junk hash on a hand-authored memory cannot validate.
+ * Authored by a person at the CLI: `agent` and `model` are FORBIDDEN, because
+ * a human has neither. The schema makes inventing them impossible rather than
+ * merely discouraged.
+ */
+export const humanAuthoredProvenanceSchema = z
+  .object({
+    origin: z.literal("authored"),
+    author: z.literal("human"),
+    session: sessionId.optional(),
+  })
+  .strict();
+
+export const authoredProvenanceSchema = z.discriminatedUnion("author", [
+  agentAuthoredProvenanceSchema,
+  humanAuthoredProvenanceSchema,
+]);
+
+/**
+ * PROVENANCE IS SHAPED BY WHO WROTE IT, AND FROM WHAT.
  *
- * Always serialized, and leads the provenance block. Future origins
- * (`imported`, `registry`) stay additive, as with anchor `kind`. There is no
- * default: defaulting either way would silently mean the wrong thing.
+ * `origin` says how the memory came to exist and governs `source_hash`;
+ * within `authored`, `author` says who wrote it and governs `agent`/`model`.
+ * Every field's presence is therefore meaningful: an auditor can reconstruct
+ * *who wrote this, from what, in what context* purely from which fields
+ * exist, and no field can be plausible junk because none can be present
+ * without a nameable referent behind it.
+ *
+ * `.strict()` on each variant is what does the forbidding — an unrecognized
+ * key is a validation failure, never a field to ignore.
+ *
+ * Both discriminators are always serialized and lead their block, with no
+ * default: defaulting would silently mean the wrong thing. Future origins
+ * (`imported`, `registry`) stay additive, as with anchor `kind`.
  */
 export const provenanceSchema = z.discriminatedUnion("origin", [
   distilledProvenanceSchema,
@@ -233,9 +262,12 @@ export type MemoryScope = (typeof MEMORY_SCOPES)[number];
 export type GitAnchor = z.infer<typeof gitAnchorSchema>;
 export type Anchor = z.infer<typeof anchorSchema>;
 export type ProvenanceOrigin = (typeof PROVENANCE_ORIGINS)[number];
+export type ProvenanceAuthor = (typeof PROVENANCE_AUTHORS)[number];
 export type Provenance = z.infer<typeof provenanceSchema>;
 export type DistilledProvenance = z.infer<typeof distilledProvenanceSchema>;
 export type AuthoredProvenance = z.infer<typeof authoredProvenanceSchema>;
+export type AgentAuthoredProvenance = z.infer<typeof agentAuthoredProvenanceSchema>;
+export type HumanAuthoredProvenance = z.infer<typeof humanAuthoredProvenanceSchema>;
 export type Memory = z.infer<typeof memorySchema>;
 
 /**

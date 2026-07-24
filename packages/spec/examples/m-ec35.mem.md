@@ -12,11 +12,11 @@ anchors:
     path: packages/core/src/git/log.ts
     commit: 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b
 provenance:
-  origin: distilled
+  origin: authored
+  author: agent
   session: sess-01H8V2C1
   agent: claude-code
   model: claude-opus-4-8
-  source_hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 ---
 
 Do not use `isomorphic-git` for rename detection — `log --follow` has no equivalent.

@@ -79,27 +79,37 @@ offset never shows up as a diff.
 Timestamps are always serialized double-quoted, by explicit rule rather than by
 the emitter's quoting heuristics.
 
-### Provenance origin governs `source_hash`
+### Provenance is shaped by who wrote it, and from what
 
-`provenance.origin` is a discriminator — always serialized, leading the block,
-with no default, because defaulting either way would silently mean the wrong
-thing. Future origins (`imported`, `registry`) stay additive.
+Provenance carries two discriminators. `origin` says **how the memory came to
+exist** and governs `source_hash`; within `authored`, `author` says **who wrote
+it** and governs `agent` and `model`. Both are always serialized and lead the
+block, with no default, because defaulting would silently mean the wrong thing.
 
-| `origin` | `source_hash` |
-| --- | --- |
-| `distilled` | **required** — sha256 of the exact digest artifact the distiller consumed |
-| `authored` | **forbidden** — written directly; there is no artifact behind it |
+| Shape | `session` | `agent` / `model` | `source_hash` |
+| --- | --- | --- | --- |
+| `distilled` | required | required | **required** — sha256 of the digest artifact the distiller consumed |
+| `authored` + `author: agent` | optional | required | forbidden |
+| `authored` + `author: human` | optional | **forbidden** | forbidden |
 
-Forbidden, not optional. A hand-authored memory carrying a plausible-looking
-junk hash would validate under an optional field, and an unfalsifiable
-assertion dressed as provenance is worse for an auditor than no assertion at
-all. Because absence is enforced, **the presence of a hash is meaningful**: if
-you see one, a nameable artifact stands behind it.
+Forbidden, not optional — and that is the whole point. Under an optional field,
+a hand-authored memory could carry a plausible-looking junk hash, or a person at
+a terminal could invent a model they never used; an unfalsifiable assertion
+dressed as provenance is worse for an auditor than no assertion at all. Because
+absence is *enforced*, **presence is meaningful**: no field can appear without a
+nameable referent behind it.
+
+The net effect is that an auditor can reconstruct *who wrote this, from what, in
+what context* purely from which fields exist. "A human ratified this into the
+book" and "an agent asserted it" are different claims, and the format keeps them
+different.
 
 The digest artifact lives in `.membook/` runtime storage, which is not
-committed — so the audit claim is *locally* verifiable where the archive
-exists, and never globally. Provenance for an `authored` memory is the git
-history of the commit that introduced it.
+committed — so the audit claim is *locally* verifiable where the archive exists,
+and never globally. Provenance for an `authored` memory is the git history of
+the commit that introduced it.
+
+Future origins (`imported`, `registry`) stay additive, as with anchor `kind`.
 
 ### Every memory carries at least one anchor
 
@@ -197,7 +207,7 @@ if (!result.ok) quarantine(file, result.error.issues);
 | `created` | yes | Canonical UTC timestamp |
 | `verified` | conditional | Required unless `status` is `unverified` |
 | `anchors` | yes | At least one |
-| `provenance` | yes | `origin`, `session`, `agent`, `model`, and `source_hash` iff `distilled` |
+| `provenance` | yes | `origin`, plus `author` when `authored`; remaining fields governed per the table above |
 | `supersedes` | no | Id of the memory this replaces |
 
 Unknown fields are rejected.

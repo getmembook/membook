@@ -106,13 +106,12 @@ const examples: Example[] = [
         { path: "packages/spec/src/serialize.ts", commit: COMMIT_A },
         { path: "packages/core/src/store/read.ts", commit: COMMIT_A },
       ],
-      // Written directly rather than distilled from a session digest, so
-      // there is no artifact to hash and `source_hash` is forbidden.
+      // A person typing `membook remember` at a terminal: no digest artifact
+      // to hash, and no agent or model, so all three are forbidden. Written
+      // outside any session, so `session` is absent too.
       provenance: {
         origin: "authored",
-        session: "sess-01H8W9Q7",
-        agent: "claude-code",
-        model: "claude-opus-4-8",
+        author: "human",
       },
     },
   },
@@ -168,12 +167,14 @@ const examples: Example[] = [
       anchors: [
         { path: "packages/core/src/git/log.ts", commit: COMMIT_B },
       ],
+      // An agent writing directly rather than distilling: it knows what it
+      // is, so `agent` and `model` are required and truthfully filled.
       provenance: {
-        origin: "distilled",
+        origin: "authored",
+        author: "agent",
         session: "sess-01H8V2C1",
         agent: "claude-code",
         model: "claude-opus-4-8",
-        source_hash: SOURCE_HASH,
       },
     },
   },

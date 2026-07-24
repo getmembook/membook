@@ -43,9 +43,13 @@ const ANCHOR_KEY_ORDER = ["kind", "path", "symbol", "line_range", "commit"] as c
 
 /** Fields quoted by explicit rule below — never by the emitter's heuristics. */
 const TIMESTAMP_KEYS = new Set(["created", "verified"]);
-/** `origin` leads, for the same reason `kind` leads an anchor: it governs. */
+/**
+ * Discriminators lead, for the same reason `kind` leads an anchor: they
+ * govern which of the remaining fields may appear at all.
+ */
 const PROVENANCE_KEY_ORDER = [
   "origin",
+  "author",
   "session",
   "agent",
   "model",

@@ -55,13 +55,19 @@ describe("golden examples", () => {
     );
   });
 
-  it("ships a golden fixture for both provenance origins", () => {
-    const origins = files.map(
-      (f) =>
-        parseMemfile(readFileSync(join(EXAMPLES_DIR, f), "utf8"), f).frontmatter
-          .provenance.origin,
+  it("ships a golden fixture for all three provenance shapes", () => {
+    const shapes = files.map((f) => {
+      const { provenance } = parseMemfile(
+        readFileSync(join(EXAMPLES_DIR, f), "utf8"),
+        f,
+      ).frontmatter;
+      return provenance.origin === "distilled"
+        ? "distilled"
+        : `authored:${provenance.author}`;
+    });
+    expect(new Set(shapes)).toEqual(
+      new Set(["distilled", "authored:agent", "authored:human"]),
     );
-    expect(new Set(origins)).toEqual(new Set(["distilled", "authored"]));
   });
 
   it.each(files)("%s filename matches its id", (file) => {
@@ -264,12 +270,13 @@ describe("loud failure", () => {
     ).toThrow(MemfileValidationError);
   });
 
-  it("accepts authored provenance with no source_hash", () => {
+  it("accepts agent-authored provenance with no source_hash", () => {
     expect(() =>
       serializeMemfile(
         validMemory({
           provenance: {
             origin: "authored",
+            author: "agent",
             session: "sess-1",
             agent: "claude-code",
             model: "claude-opus-4-8",
@@ -278,6 +285,101 @@ describe("loud failure", () => {
         "A statement.",
       ),
     ).not.toThrow();
+  });
+
+  // A person at a CLI has no model. The schema makes inventing one
+  // impossible, rather than leaving a field they are tempted to fill.
+  it("rejects human-authored provenance carrying an agent or model", () => {
+    for (const rogue of [{ agent: "claude-code" }, { model: "claude-opus-4-8" }]) {
+      expect(() =>
+        serializeMemfile(
+          validMemory({
+            provenance: { origin: "authored", author: "human", ...rogue } as never,
+          }),
+          "A statement.",
+        ),
+      ).toThrow(MemfileValidationError);
+    }
+  });
+
+  it("accepts human-authored provenance with no session, agent or model", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({ provenance: { origin: "authored", author: "human" } }),
+        "A statement.",
+      ),
+    ).not.toThrow();
+  });
+
+  it("accepts human-authored provenance written inside a session", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: { origin: "authored", author: "human", session: "sess-1" },
+        }),
+        "A statement.",
+      ),
+    ).not.toThrow();
+  });
+
+  it("rejects agent-authored provenance with no agent or model", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: { origin: "authored", author: "agent" } as never,
+        }),
+        "A statement.",
+      ),
+    ).toThrow(MemfileValidationError);
+  });
+
+  it("rejects authored provenance with no author discriminator", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: {
+            origin: "authored",
+            agent: "claude-code",
+            model: "claude-opus-4-8",
+          } as never,
+        }),
+        "A statement.",
+      ),
+    ).toThrow(MemfileValidationError);
+  });
+
+  it("rejects distilled provenance carrying an author discriminator", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: {
+            origin: "distilled",
+            author: "agent",
+            session: "sess-1",
+            agent: "claude-code",
+            model: "claude-opus-4-8",
+            source_hash: SOURCE_HASH,
+          } as never,
+        }),
+        "A statement.",
+      ),
+    ).toThrow(MemfileValidationError);
+  });
+
+  it("rejects distilled provenance with no session", () => {
+    expect(() =>
+      serializeMemfile(
+        validMemory({
+          provenance: {
+            origin: "distilled",
+            agent: "claude-code",
+            model: "claude-opus-4-8",
+            source_hash: SOURCE_HASH,
+          } as never,
+        }),
+        "A statement.",
+      ),
+    ).toThrow(MemfileValidationError);
   });
 
   it("rejects an anchorless memory on write", () => {
