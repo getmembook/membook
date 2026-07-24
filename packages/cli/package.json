@@ -1,0 +1,63 @@
+{
+  "name": "membook",
+  "version": "0.1.0",
+  "description": "Memory that stays true — a verifiable memory engine for coding agents",
+  "license": "MIT",
+  "author": "Stag.ai Ltd",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getmembook/membook",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/getmembook/membook",
+  "bugs": {
+    "url": "https://github.com/getmembook/membook/issues"
+  },
+  "keywords": [
+    "membook",
+    "agent-memory",
+    "ai-memory",
+    "coding-agent",
+    "cli",
+    "verification"
+  ],
+  "type": "module",
+  "bin": {
+    "membook": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.5.0"
+  },
+  "dependencies": {
+    "@membook/core": "workspace:*",
+    "@membook/spec": "workspace:*",
+    "commander": "^13.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "execa": "^9",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

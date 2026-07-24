@@ -15,6 +15,37 @@ importers:
         specifier: ^2.31.1
         version: 2.31.1(@types/node@20.19.43)
 
+  packages/cli:
+    dependencies:
+      '@membook/core':
+        specifier: workspace:*
+        version: link:../core
+      '@membook/spec':
+        specifier: workspace:*
+        version: link:../spec
+      commander:
+        specifier: ^13.1.0
+        version: 13.1.0
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.0
+        version: 20.19.43
+      execa:
+        specifier: ^9
+        version: 9.6.1
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.22)(tsx@4.23.1)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@20.19.43)(tsx@4.23.1)(yaml@2.9.0)
+
   packages/core:
     dependencies:
       '@membook/spec':
@@ -830,6 +861,10 @@ packages:
 
   chownr@1.1.4:
     resolution: {integrity: sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg==}
+
+  commander@13.1.0:
+    resolution: {integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==}
+    engines: {node: '>=18'}
 
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
@@ -2540,6 +2575,8 @@ snapshots:
       readdirp: 4.1.2
 
   chownr@1.1.4: {}
+
+  commander@13.1.0: {}
 
   commander@4.1.1: {}
 
