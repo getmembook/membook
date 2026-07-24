@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose something new
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check [CLAUDE.md](https://github.com/getmembook/membook/blob/main/CLAUDE.md)
+        first. It lists the v0.1 build order and what is **explicitly out of
+        scope** — some things are deferred on purpose, with reasons recorded.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        What are you trying to do that you cannot do today? Describe the
+        problem rather than a proposed solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else would solve this, and why is it worse?
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I have read the out-of-scope list in CLAUDE.md
+          required: true
+        - label: This would need a new runtime dependency (install weight is a feature — please justify above)

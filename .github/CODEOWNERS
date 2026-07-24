@@ -1,0 +1,10 @@
+# Default owner for everything.
+*       @hiranofficial
+
+# The spec is a published standard: changes here affect every implementer.
+/packages/spec/         @hiranofficial
+
+# Architecture decisions and security posture.
+/CLAUDE.md              @hiranofficial
+/SECURITY.md            @hiranofficial
+/.github/               @hiranofficial

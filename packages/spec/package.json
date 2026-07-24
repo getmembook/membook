@@ -4,6 +4,11 @@
   "description": "The Memfile standard — schema, anchor grammar, validator, and deterministic serialization for Membook memories",
   "license": "MIT",
   "author": "Stag.ai Ltd",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getmembook/membook",
+    "directory": "packages/spec"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -14,7 +19,8 @@
   "files": [
     "dist",
     "examples",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
@@ -24,11 +30,6 @@
   },
   "engines": {
     "node": ">=20"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/getmembook/membook",
-    "directory": "packages/spec"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
@@ -41,5 +42,23 @@
     "typescript": "^5.8.3",
     "vitest": "^3.2.4",
     "tsx": "^4.20.3"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://github.com/getmembook/membook",
+  "bugs": {
+    "url": "https://github.com/getmembook/membook/issues"
+  },
+  "keywords": [
+    "membook",
+    "memfile",
+    "agent-memory",
+    "ai-memory",
+    "coding-agent",
+    "provenance",
+    "schema",
+    "markdown",
+    "specification"
+  ]
 }

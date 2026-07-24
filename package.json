@@ -3,12 +3,29 @@
   "private": true,
   "license": "MIT",
   "author": "Stag.ai Ltd",
-  "engines": { "node": ">=20" },
+  "description": "Membook — a verifiable memory engine for coding agents. Memory that stays true.",
+  "homepage": "https://github.com/getmembook/membook",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getmembook/membook"
+  },
+  "bugs": {
+    "url": "https://github.com/getmembook/membook/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.1"
   }
 }

@@ -2,10 +2,136 @@
 
 **Memory that stays true.** A verifiable memory engine for coding agents.
 
-Every memory is anchored to checkable reality — commits, files, symbols — and
-automatically flagged when the code it describes changes. Canonical storage is
-plain markdown committed to your repo; served to every agent over MCP.
+[![CI](https://github.com/getmembook/membook/actions/workflows/ci.yml/badge.svg)](https://github.com/getmembook/membook/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](./package.json)
 
-> Private pre-release. See `CLAUDE.md` for build context and `docs/` for the concept.
+Coding agents forget. Worse, they misremember: a memory saying "we use Jest"
+survives the migration to Vitest and gets served to the agent as fact.
+
+Membook anchors every memory to **checkable reality** — a commit, a file, a
+symbol — so when the code changes, the memory knows. Storage is plain markdown
+committed to your repo: it renders on GitHub, diffs in pull requests, and
+survives review like any other artifact.
+
+> **Status: pre-release, under active development.** The format and the engine
+> are built and tested; the MCP server, verify pass, and CLI are not yet. See
+> [Status](#status) for exactly what works today. Expect breaking changes
+> before v0.1.
+
+## Why it's different
+
+Every memory system in the market stores text that nothing keeps honest.
+Membook's differentiator is the **verification loop**:
+
+1. A memory is stored with one or more **anchors** — `{path, symbol?, commit}`.
+2. Verification diffs `commit..HEAD` against the anchor paths.
+3. Untouched paths re-verify for free. Touched paths get one targeted re-check.
+4. The memory becomes `verified`, `stale`, or `invalidated` — and says so.
+
+A memory that cannot be checked against reality is a floating sentence. The
+schema rejects one with no anchor.
+
+## Design commitments
+
+These are settled, and the code enforces them:
+
+- **Files are the truth; the database is a cache.** Canonical state is one
+  markdown file per memory. SQLite is derived, disposable, and rebuilt
+  bit-identically by `reindex`. Delete it any time.
+- **No daemon.** Nothing resident, no ports, no background processes.
+- **Local-first.** No network telemetry, ever.
+- **Honest status.** A memory is `unverified` until something actually
+  verifies it. This repo's own memories are `unverified` today, because the
+  verify pass does not exist yet — claiming otherwise would be exactly the
+  unfalsifiable assertion the project exists to prevent.
+- **MIT, genuinely.** Not Elastic-licensed, not source-available.
+
+## A memory
+
+```markdown
+---
+memfile: 1
+id: m-6dd5
+type: gotcha
+status: verified
+scope: repo
+confidence: 0.9
+created: "2026-07-21T16:42:00Z"
+verified: "2026-07-24T08:00:00Z"
+anchors:
+  - kind: git
+    path: packages/core/src/index-db.ts
+    symbol: openIndex
+    line_range: [18, 46]
+    commit: 9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d
+provenance:
+  origin: distilled
+  session: sess-01H8X4M2
+  agent: claude-code
+  model: claude-opus-4-8
+  source_hash: e3b0c442…
+---
+
+`better-sqlite3` must be loaded after the process sets `PRAGMA journal_mode=WAL`,
+or concurrent MCP sessions on the same repo deadlock on first write.
+```
+
+Provenance is shaped so that **presence is meaningful**: a hash appears only
+when a real artifact stands behind it, and a human-authored memory cannot
+express an `agent` or `model` it never had. An auditor can reconstruct who
+wrote a memory, from what, and in what context, purely from which fields exist.
+
+## Status
+
+| Package                            | What it is                                               | State               |
+| ---------------------------------- | -------------------------------------------------------- | ------------------- |
+| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator | **Built**, 98 tests |
+| [`@membook/core`](./packages/core) | Engine — store, index, reindex, search                   | **Built**, 57 tests |
+| `@membook/mcp`                     | MCP server (`remember` / `recall` / `session_digest`)    | Not started         |
+| `membook`                          | CLI (`init`, `status`, `review`, `verify`, `reindex`)    | Not started         |
+| Verify pass                        | The verification loop + fixture harness                  | Not started         |
+
+Neither package is published to npm yet.
+
+## Development
+
+Requires Node ≥ 20 (the repo pins 24 via [mise](https://mise.jdx.dev) and
+`.nvmrc`) and [pnpm](https://pnpm.io) 9.
+
+```bash
+pnpm install
+```
+
+```bash
+pnpm test
+```
+
+```bash
+pnpm build && pnpm typecheck
+```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the workflow, and
+[CLAUDE.md](./CLAUDE.md) for architecture decisions and the build order — it is
+the build context for both humans and coding agents.
+
+## The standard
+
+The Memfile format is documented in
+[`packages/spec/README.md`](./packages/spec/README.md) and published as a JSON
+Schema. It is deliberately free to implement: the format is a standard we would
+like others to adopt, and the verification loop is the product.
+
+## Security
+
+Memories get committed, so a secret written into one is persisted and pushed.
+Scanning every distillation output before it reaches `.membook/` is a
+launch-blocking commitment — and it is **not implemented yet**; the write-path
+seam it plugs into is. Until then, treat anything you pass to Membook as
+content you are choosing to commit.
+
+Please report vulnerabilities privately — see [SECURITY.md](./SECURITY.md).
+
+## License
 
 MIT © Stag.ai Ltd
