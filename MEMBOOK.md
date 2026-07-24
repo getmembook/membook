@@ -10,12 +10,18 @@ Every memory is anchored to specific files. Anything whose anchored code has
 changed since it was last checked is withheld from this file rather than
 asserted.
 
-It carries all 6 eligible memories. 4 further memories are withheld because
-the code they describe has changed since they were last checked. This file is
+It carries all 11 eligible memories. 1 further memory is withheld because the
+code it describes has changed since it was last checked. This file is
 generated, never edited by hand — corrections belong in `.membook/memories/`.
 
 Entries marked `(unverified)` have not been checked against current code yet.
 Treat them as informed leads rather than established fact.
+
+### gotcha (unverified)
+
+`npm view` 404s for minutes after a first publish while the package exists fine; use `npm owner ls <pkg>` to confirm, since it reads a different path. Also `--tag alpha` does not stop npm setting `latest` — a package's first publish always takes `latest` whatever tag you pass.
+
+`docs/releasing.md`
 
 ### gotcha
 
@@ -28,6 +34,30 @@ Do not tune retrieval on BM25 alone: on a small corpus its IDF is degenerate, so
 Never add a gitleaks allowlist or --no-verify for scanner test fixtures; assemble credential-shaped strings at runtime from fragments instead. This repo is upstream of a standard, so every mechanism in its history is a worked example someone copies, and an allowlist entry is a published tutorial in annotating past a scanner. Expect two rounds: leak detection is context-sensitive, so a fragment that matches no rule alone can still trip the generic-api-key rule purely by sitting next to a property named like a key.
 
 `packages/core/src/fake-secrets.ts#FAKE_SECRETS`
+
+### gotcha
+
+`memfile` is a z.literal, so bumping the spec version makes OUR OWN reader reject every existing file, not just old readers — every memory in every repo quarantines on upgrade. v0.2 therefore holds explicit versioned schemas with parse dispatching on the field, read tolerance for all versions <= current forever, writes always at current, and no silent upgrade-on-touch: files are committed, so migration must be a reviewable diff via `membook migrate`. Version machinery lands before any change that forces a tick.
+
+`packages/spec/src/schema.ts#MEMFILE_SPEC_VERSION`, `docs/design/v0.2-workspaces.md`
+
+### gotcha (unverified)
+
+An npm granular token needs BOTH `All packages` scope and `bypass 2FA` to publish this repo. Owning the membook org reserves the @membook scope but not the unscoped `membook` name — they are separate namespaces, so an org-scoped token publishes the scoped packages and fails on the CLI with `You may not perform that action with these credentials`, which reads like a permissions bug rather than a scope gap.
+
+`docs/releasing.md`
+
+### decision
+
+`scope` becomes a discriminated union in v0.2: user-scope memories forbid anchors entirely, and the verification vocabulary (`status`, `verified`) is absent from their shape rather than perpetually unverified. An anchor is what makes a memory a checkable claim about the world; a user preference is testimony about the human, so verification is a category error against it, not a pending obligation. If you have a file to point at, it is repo knowledge wearing the wrong scope.
+
+`packages/spec/src/schema.ts#memorySchema`, `docs/design/v0.2-workspaces.md`
+
+### gotcha (unverified)
+
+Publish with pnpm, never npm. npm leaves pnpm's `workspace:*` protocol unresolved in the packed tarball, so the install fails and node_modules/.bin/membook is never created — the symptom is `npx membook` doing nothing, not any error mentioning workspaces. The only check that catches it is installing the tarball and confirming the binary linked; npm's warning about `bin` is misleading and fires even when bin is fine.
+
+`packages/cli/package.json`, `docs/releasing.md`
 
 ### convention
 
