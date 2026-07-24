@@ -77,6 +77,32 @@ export {
   type LlmRecheckerOptions,
 } from "./llm-recheck.js";
 export {
+  distill,
+  sourceHash,
+  DISTILL_SYSTEM,
+  MAX_STATEMENT_CHARS,
+  DEFAULT_MAX_PER_SOURCE,
+  type DistillCandidate,
+  type DistillRejection,
+  type DistillResult,
+  type DistillSource,
+  type DistillOptions,
+  type RejectionReason,
+} from "./distill.js";
+export {
+  seed,
+  seedFrontmatter,
+  findSeedSources,
+  SEED_SYSTEM,
+  MIN_SOURCE_CHARS,
+  MAX_SOURCE_CHARS,
+  DEFAULT_MAX_FILES,
+  type SeedCandidate,
+  type SeedReport,
+  type SeedOptions,
+  type SeedSourceFile,
+} from "./seed.js";
+export {
   compileBook,
   writeBook,
   expectedValue,

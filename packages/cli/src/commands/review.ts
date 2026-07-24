@@ -69,7 +69,7 @@ export async function review(options: ReviewOptions): Promise<void> {
   const log =
     options.log ?? ((line: string) => process.stdout.write(`${line}\n`));
   const now = options.now ?? (() => new Date());
-  const membook = new Membook(options.root);
+  const membook = new Membook(options.root, { instrumentation: true });
   const { memories } = await membook.store.readAll();
 
   const pending = memories.filter((m) =>
@@ -153,6 +153,15 @@ export async function review(options: ReviewOptions): Promise<void> {
       if (answer === "q" || answer === "quit") break;
 
       if (answer === "d" || answer === "delete") {
+        // Recorded BEFORE the delete: afterwards the memory is gone from disk
+        // and its status — the thing that makes the label worth having — is
+        // unrecoverable.
+        membook.instrumentation.record({
+          event: "review",
+          id: fm.id,
+          action: "delete",
+          from: fm.status,
+        });
         await membook.forget(fm.id);
         rejected += 1;
         log(ok(`Deleted ${fm.id}.`));
@@ -181,6 +190,12 @@ export async function review(options: ReviewOptions): Promise<void> {
           },
           memory.memfile.body
         );
+        membook.instrumentation.record({
+          event: "review",
+          id: fm.id,
+          action: "ratify",
+          from: fm.status,
+        });
         ratified += 1;
         log(ok(`Ratified ${fm.id} at ${head.slice(0, 7)}.`));
         log("");

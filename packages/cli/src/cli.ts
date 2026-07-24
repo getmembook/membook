@@ -4,7 +4,10 @@ import { MEMORY_TYPES, type MemoryType } from "@membook/spec";
 import { init } from "./commands/init.js";
 import { status } from "./commands/status.js";
 import { review } from "./commands/review.js";
-import { book, reindex, remember, verify } from "./commands/misc.js";
+import { book, recall, reindex, remember, verify } from "./commands/misc.js";
+import { seed } from "./commands/seed.js";
+import { distill } from "./commands/distill.js";
+import { hookPrompt } from "./commands/hook.js";
 import { die } from "./output.js";
 
 const program = new Command();
@@ -26,8 +29,29 @@ const root = (): string => program.opts<{ cwd: string }>().cwd;
 program
   .command("init")
   .description("set this repository up for Membook")
-  .action(async () => {
-    await init({ root: root() });
+  .option(
+    "--hooks",
+    "also install a Claude Code hook that recalls memory on every prompt"
+  )
+  .action(async (opts: { hooks?: boolean }) => {
+    await init({
+      root: root(),
+      ...(opts.hooks === true ? { hooks: true } : {}),
+    });
+  });
+
+/**
+ * Machine-facing, not for humans: invoked by a harness hook, reads the
+ * harness's JSON on stdin, and prints memory worth injecting. Hidden from
+ * `--help` because typing it does nothing useful.
+ */
+program
+  .command("hook", { hidden: true })
+  .description("answer a harness hook (reads JSON on stdin)")
+  .argument("<event>", "hook event; only `prompt` is supported")
+  .action(async (event: string) => {
+    if (event !== "prompt") return;
+    await hookPrompt({ root: root() });
   });
 
 program
@@ -82,6 +106,76 @@ program
   .action(async () => {
     await book({ root: root() });
   });
+
+program
+  .command("distill")
+  .description("turn session notes into candidate memories")
+  .argument("[file]", "notes file; reads stdin when omitted")
+  .option("--dry-run", "show what would be recorded, write nothing")
+  .option("--model <model>", "override the model")
+  .action(
+    async (
+      file: string | undefined,
+      opts: { dryRun?: boolean; model?: string }
+    ) => {
+      await distill({
+        root: root(),
+        ...(file !== undefined ? { file } : {}),
+        ...(opts.dryRun === true ? { dryRun: true } : {}),
+        ...(opts.model !== undefined ? { model: opts.model } : {}),
+      });
+    }
+  );
+
+program
+  .command("seed")
+  .description("distill existing docs into candidate memories")
+  .option("--dry-run", "show what would be recorded, write nothing")
+  .option("-n, --max-files <n>", "how many documents to read", "12")
+  .option("--model <model>", "override the model")
+  .action(
+    async (opts: { dryRun?: boolean; maxFiles: string; model?: string }) => {
+      const maxFiles = Number(opts.maxFiles);
+      if (!Number.isInteger(maxFiles) || maxFiles < 1) {
+        die("--max-files must be a positive whole number.");
+      }
+      await seed({
+        root: root(),
+        maxFiles,
+        ...(opts.dryRun === true ? { dryRun: true } : {}),
+        ...(opts.model !== undefined ? { model: opts.model } : {}),
+      });
+    }
+  );
+
+program
+  .command("recall")
+  .description("see what an agent would be served for a query")
+  .argument("<query>", "what you want to know about")
+  .option(
+    "-p, --path <path...>",
+    "files you are working on; memories anchored to them rank higher"
+  )
+  .option("--include-stale", "also show memories whose code has drifted")
+  .option("-n, --limit <n>", "maximum memories to show", "8")
+  .action(
+    async (
+      query: string,
+      opts: { path?: string[]; includeStale?: boolean; limit: string }
+    ) => {
+      const limit = Number(opts.limit);
+      if (!Number.isInteger(limit) || limit < 1) {
+        die("--limit must be a positive whole number.");
+      }
+      await recall({
+        root: root(),
+        query,
+        limit,
+        ...(opts.path !== undefined ? { paths: opts.path } : {}),
+        ...(opts.includeStale === true ? { includeStale: true } : {}),
+      });
+    }
+  );
 
 program
   .command("remember")

@@ -86,19 +86,38 @@ wrote a memory, from what, and in what context, purely from which fields exist.
 
 ## Status
 
-| Package                            | What it is                                                     | State                |
-| ---------------------------------- | -------------------------------------------------------------- | -------------------- |
-| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator       | **Built**, 101 tests |
-| [`@membook/core`](./packages/core) | Engine — store, index, verify, recall, book                    | **Built**, 188 tests |
-| [`@membook/mcp`](./packages/mcp)   | MCP server (`remember` / `recall` / `session_digest`)          | **Built**, 20 tests  |
-| Verify pass                        | The verification loop + fixture harness                        | **Built**            |
-| Boot pack                          | `MEMBOOK.md` generator                                         | **Built**            |
-| The three seams                    | Secret scanner, LLM re-checker, instrumentation                | **Built**            |
-| [`membook`](./packages/cli)        | CLI (`init`, `status`, `review`, `verify`, `remember`, `book`) | **Built**, 25 tests  |
-| Distillation                       | Session digest → candidate memories                            | Not started          |
+| Package                            | What it is                                               | State                |
+| ---------------------------------- | -------------------------------------------------------- | -------------------- |
+| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator | **Built**, 101 tests |
+| [`@membook/core`](./packages/core) | Engine — store, index, verify, recall, book, distill     | **Built**, 225 tests |
+| [`@membook/mcp`](./packages/mcp)   | MCP server (`remember` / `recall` / `session_digest`)    | **Built**, 24 tests  |
+| Verify pass                        | The verification loop + fixture harness                  | **Built**            |
+| Boot pack                          | `MEMBOOK.md` generator                                   | **Built**            |
+| The three seams                    | Secret scanner, LLM re-checker, instrumentation          | **Built**            |
+| [`membook`](./packages/cli)        | CLI — see below                                          | **Built**, 79 tests  |
+| Distillation                       | Docs and sessions → candidate memories                   | **Built**            |
 
-Distillation is deliberately out of scope for v0.1 — the memories an agent
-records through `remember` are the ones that matter first.
+### Commands
+
+```
+membook init [--hooks]   set up; optionally install a Claude Code recall hook
+membook seed             distill existing docs into candidate memories
+membook distill [file]   turn session notes into candidate memories
+membook recall <query>   see what an agent would be served
+membook remember <text>  record a memory yourself
+membook status           what is known, and how far to trust it
+membook verify           re-check memories against the current code
+membook review           ratify or delete what a human has not seen
+membook book             regenerate MEMBOOK.md
+membook reindex          rebuild the index from the files
+```
+
+`seed` and `distill` need a model (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`).
+Everything else works without one.
+
+Both write candidates as `unverified` and hand them to `review`: a model
+proposes, a person disposes. That human decision is the strongest verification
+Membook has, and the only ground truth it can measure a re-checker against.
 
 ## Platform support
 

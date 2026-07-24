@@ -331,6 +331,143 @@ verdict accuracy, which would have scored this checker 100%.
 that cites real code restores; one that produces plausible prose cannot. That
 is a better experiment than the one it replaces.
 
+### 2026-07-24 — a full loop on a second repo, and two null sinks
+
+Ran every v0.1 surface end-to-end on `agent-first-ms` — a small, docs-only
+repo, chosen because it can be broken freely. Worth naming that it has no
+source files: the mechanics exercise fully, but "an agent reasoning about
+code" does not, so this is a functional bed, not an adoption one.
+
+Everything in the middle of the loop held. Both write paths recorded; the
+uncommitted-anchor guard and the secret scanner both refused; untouched
+anchors re-verified free; editing an anchored file flipped it to stale;
+`git mv` was followed via `--follow` and the anchor path was rewritten to the
+new name rather than lost; deleting the file invalidated it; the book withheld
+the drifted memories and said so in its header; `review` ratified; and
+`MEMBOOK.md` came back **byte-identical** after deleting the index and
+reindexing.
+
+The finding was in the observability, not the loop. Two of the five
+`new Membook()` sites in the CLI were constructed without instrumentation, so:
+
+- **`book` never logged.** `writeBook()` builds its event faithfully and hands
+  it to a `NullInstrumentation`. Carried, withheld, excluded and token count —
+  precisely the numbers the honesty claim rests on — were discarded on every
+  human run. The log said the book had never been compiled.
+- **`review` never logged at all.** It writes `status: verified` through the
+  store directly. A human ratification is the only **ground truth** in the
+  system; every other signal is a machine's opinion. Re-check accuracy is
+  computable exactly to the extent these labels exist — and there were none.
+
+Both fixed, with tests that read the log **file** rather than a spy, because
+the defect was an event constructed correctly and dropped: a spy injected by
+the test would have passed.
+
+One consequence documented rather than engineered away: ratifying rewrites the
+file, so it also emits a `remember` event. Write counts must be taken over
+distinct ids.
+
+**Also noted, not fixed.** There is no `recall` on the CLI — `init status
+verify review reindex book remember`. Retrieval is MCP-only, so a human cannot
+inspect what their agent would be served, and retrieval precision is the
+binding constraint. Left as a recommendation rather than a silent addition.
+
+**Method note.** One check in this run was a false pass: a determinism test
+hashed `membook recall` output before and after a rebuild and reported
+identical. Both sides were the same `unknown command` error. Re-run against
+`MEMBOOK.md` bytes, which passes for real. A test whose subject does not exist
+still returns green.
+
+### 2026-07-24 — closing the volition gap, and a scoring bug it exposed
+
+Four things landed: `membook recall` on the CLI, `membook seed`, `membook
+distill`, and an opt-in `init --hooks`. Together they attack the one problem
+measurement kept returning: the loop has a working middle and two ends that
+depend on an agent choosing to act.
+
+**`recall` on the CLI.** Retrieval precision is the binding constraint and was
+unobservable without an agent volunteering to ask. It goes through `recall`,
+not `search`, on purpose — a raw index query would show a friendlier result
+than the one an agent actually gets, which is the self-deception the command
+exists to prevent.
+
+**`seed`.** Distills `CLAUDE.md`, ADRs and design docs into candidates, so the
+book is useful before any agent has cooperated once. Everything is written
+`unverified` and goes to `review`, which is also where the product gets the
+only ground-truth labels it will ever have. First live run on a 3B: 4 kept, **3
+discarded for citing files that do not exist** — the grounding gate earning its
+keep immediately.
+
+**`distill`.** The write side. `remember` asks an agent to notice it learned
+something, judge it durable, phrase it, and pick anchors — four judgements at
+the moment it is trying to finish. Distillation moves the bar to "say what
+happened". On real session notes the 3B correctly ignored all the narration
+(build runs, a typo fix, reading a file) and caught one of two real gotchas,
+stating it slightly backwards, and missed the dead end — which was the best
+memory in the notes. Machinery sound, small-model judgement weak, consistent
+with every previous read.
+
+Both prompts live in `prompts/` and a test asserts the shipped constant is
+character-identical to the reviewed markdown. Without that, "versioned and
+reviewed like code" describes a file nothing reads.
+
+#### The scoring bug
+
+Building the hook surfaced something the whole product had been carrying.
+
+The hook injected a memory about auth tokens in response to `write me a haiku
+about kubernetes`. Probing the scorer against one memory:
+
+| query                                   | before | after      |
+| --------------------------------------- | ------ | ---------- |
+| `auth token refresh boundary timer`     | 1.2496 | 0.9996     |
+| `why do auth tokens refresh oddly here` | 0.5355 | **0.9372** |
+| `write me a haiku about kubernetes`     | 0.2499 | **0.0000** |
+| `what is the weather today`             | 0.2499 | **0.0000** |
+| `refactor the css grid layout`          | 0.2499 | **0.0000** |
+
+Three unrelated queries scoring **identically** was the tell. Two causes:
+
+1. **Coverage matched substrings, not words.** `ok` ⊂ `tokens`, `time` ⊂
+   `timer`, `bound` ⊂ `boundary`. Every query collected phantom coverage.
+2. **Stopwords counted.** Coverage is a ratio, so a memory matching only `the`
+   in a five-word question scored the same 20% as one matching a rare term.
+
+Note the second row: a genuine match went **up**, 0.54 → 0.94, because
+stopwords no longer dilute the denominator. This was never a hook bug. It was a
+precision bug in the thing the architecture calls the binding constraint, and
+it was invisible because **the relative floor hides it** — the best of several
+bad hits still wins, so a bad set always produced an answer.
+
+Hence the second fix: an **absolute** floor (`RANKING.pushFloor`) alongside the
+relative one. The relative floor answers "which of these is best"; it cannot
+answer "is any of these good enough", because the top hit always clears a
+fraction of itself. That distinction does not matter when an agent asked and
+can discard the answer. It matters enormously for anything injecting context
+unasked, where the reader cannot tell where a line came from.
+
+**The general lesson.** A pull surface can tolerate a relative floor forever;
+the error is masked by the user's ability to ignore it. Adding a push surface
+is what forces an absolute judgement of quality — and it audited a scorer that
+had passed 400 tests.
+
+#### Hooks, and why they stay opt-in
+
+`init --hooks` writes a `UserPromptSubmit` hook into `.claude/settings.json`,
+merging rather than clobbering and refusing outright to rewrite a file it
+cannot parse. It is off by default: hooks are Claude Code-specific and
+zero-integration portability through `MEMBOOK.md` is a deliberate, marketed
+property, so the portable path stays primary and this is an accelerant for the
+one harness where the effect can be measured.
+
+The hook never injects a stale memory, caps at three, and — the
+non-negotiable — exits 0 silently on every failure. A memory tool that can
+wedge someone's editor is not a memory tool.
+
+**Still unmeasured.** Whether any of this moves the number. The next real
+session in a seeded repository with hooks on is the experiment; until then this
+is a better-designed guess.
+
 ### Pending
 
 - [ ] **Calibration read on a frontier model.** The floor is measured; the

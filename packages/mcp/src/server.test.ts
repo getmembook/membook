@@ -303,6 +303,30 @@ describe("stale memories are withheld, but their absence is explained", () => {
     expect(text).toMatch(/include_stale/);
   });
 
+  // An invalidated memory is never served — its anchor is gone, so nothing
+  // can re-ground it — but reporting it as "nothing recorded" tells the agent
+  // the opposite of the truth and invites it to re-derive what was known.
+  it("reports an invalidated memory instead of claiming nothing is known", async () => {
+    // Self-contained: this block's own seed is about auth, so the memory whose
+    // file gets deleted has to be written here.
+    await callText("remember", {
+      statement:
+        "The database connection pool is capped at ten in development to surface leaks early.",
+      type: "decision",
+      paths: ["src/db.ts"],
+    });
+    await execa("git", ["rm", "-q", "src/db.ts"], { cwd: root });
+    await execa("git", ["commit", "-m", "drop db"], { cwd: root });
+    const { Membook } = await import("@membook/core");
+    await new Membook(root).verify();
+
+    const text = await callText("recall", {
+      query: "database connection pool capped development",
+    });
+    expect(text).toMatch(/invalidated/);
+    expect(text).not.toMatch(/No memories recorded/);
+  });
+
   it("serves it on request, flagged", async () => {
     const text = await callText("recall", {
       query: "auth token refresh boundary",

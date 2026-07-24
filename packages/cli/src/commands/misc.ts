@@ -71,9 +71,157 @@ export async function reindex(options: CommonOptions): Promise<void> {
   log("");
 }
 
+export interface RecallOptions extends CommonOptions {
+  query: string;
+  paths?: string[];
+  includeStale?: boolean;
+  limit?: number;
+}
+
+/**
+ * Ask what an agent would be served.
+ *
+ * This exists because retrieval precision is the binding constraint — a wrong
+ * retrieval poisons a loop far more expensively than a missing one costs — and
+ * until now it was unobservable without an agent volunteering to ask. A human
+ * could write memories and never see what they bought.
+ *
+ * It deliberately goes through `recall`, not `search`: the ranked, floored,
+ * capped answer is the product surface. A raw index query would show a
+ * different, friendlier result than the one that reaches an agent, which is
+ * exactly the self-deception this command is meant to prevent.
+ */
+export async function recall(options: RecallOptions): Promise<void> {
+  const log = out(options);
+  const membook = new Membook(options.root, { instrumentation: true });
+
+  const statuses: Array<"verified" | "unverified" | "stale"> = [
+    "verified",
+    "unverified",
+  ];
+  if (options.includeStale) statuses.push("stale");
+
+  const { hits, withheld } = await membook.recall(options.query, {
+    statuses,
+    ...(options.limit !== undefined ? { limit: options.limit } : {}),
+    ...(options.paths?.length ? { contextPaths: options.paths } : {}),
+  });
+
+  log("");
+
+  if (hits.length === 0) {
+    // "We know nothing" and "we know something we no longer trust" call for
+    // opposite responses, so both drifted statuses have to be counted here.
+    // Counting only `stale` reports a deleted-file memory as nothing known —
+    // the same confusion this command exists to prevent, one status over.
+    const stale = withheld.byStatus["stale"] ?? 0;
+    const invalidated = withheld.byStatus["invalidated"] ?? 0;
+
+    if (stale + invalidated > 0) {
+      log(heading("Nothing usable for that query."));
+      log("");
+      if (stale > 0) {
+        log(
+          wrap(
+            `${stale} matching ${plural(
+              stale,
+              "memory is",
+              "memories are"
+            )} stale — the code they describe changed and nothing has confirmed them since.`
+          )
+        );
+      }
+      if (invalidated > 0) {
+        log(
+          wrap(
+            `${invalidated} matching ${plural(
+              invalidated,
+              "memory was",
+              "memories were"
+            )} invalidated — the code ${plural(
+              invalidated,
+              "it describes is",
+              "they describe is"
+            )} gone.`
+          )
+        );
+      }
+      log("");
+      // Invalidated memories are never served: the anchor is gone, so nothing
+      // can re-ground them. `review` is the only honest next step for those.
+      log(
+        dim(
+          stale > 0
+            ? "  membook recall --include-stale   see the stale ones"
+            : "  membook review                   decide what to do with them"
+        )
+      );
+    } else {
+      log(heading("Nothing recorded for that query."));
+    }
+    if (withheld.belowFloor > 0) {
+      log(
+        dim(
+          `  ${withheld.belowFloor} weak ${plural(
+            withheld.belowFloor,
+            "match",
+            "matches"
+          )} scored below the relevance floor and ${plural(
+            withheld.belowFloor,
+            "was",
+            "were"
+          )} not served.`
+        )
+      );
+    }
+    log("");
+    return;
+  }
+
+  log(
+    heading(
+      `${hits.length} ${plural(hits.length, "memory", "memories")} an agent ` +
+        `would be served for “${options.query}”`
+    )
+  );
+  log("");
+
+  for (const hit of hits) {
+    log(`${statusLabel(hit.status)}  ${hit.id}  ${dim(hit.type)}`);
+    log(wrap(hit.body, 76, "  "));
+    log(
+      dim(
+        `  ${hit.anchors
+          .map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path))
+          .join(", ")}`
+      )
+    );
+    // Shown because a human tuning retrieval needs to see the margin between
+    // what was served and what was not.
+    log(dim(`  score ${hit.score.toFixed(3)}`));
+    log("");
+  }
+
+  if (withheld.belowFloor > 0) {
+    log(
+      dim(
+        `${withheld.belowFloor} weaker ${plural(
+          withheld.belowFloor,
+          "match was",
+          "matches were"
+        )} held back below the relevance floor.`
+      )
+    );
+    log("");
+  }
+}
+
 export async function book(options: CommonOptions): Promise<void> {
   const log = out(options);
-  const membook = new Membook(options.root);
+  // Instrumented, because how much the book carried and how much it withheld
+  // are the numbers the honesty claim rests on. Found by dogfooding: the book
+  // event existed and was recorded into a null log on every human run.
+  const membook = new Membook(options.root, { instrumentation: true });
   const report = await membook.writeBook();
 
   log("");
@@ -116,21 +264,25 @@ export async function book(options: CommonOptions): Promise<void> {
  * runs before the telemetry made it obvious. An override nobody can find is
  * not an override.
  */
-export function recheckerFromEnv(
-  root: string,
-  instrumentation?: Instrumentation,
-  modelOverride?: string
-): AnchorRechecker | null {
-  let provider: ModelProvider | null = null;
+/**
+ * Resolve a model provider from the environment, or null if none is
+ * configured.
+ *
+ * Anthropic wins when both keys are present — an arbitrary but fixed choice,
+ * and a fixed one matters: a provider that varies with environment ordering
+ * makes an inconsistent result impossible to reproduce.
+ */
+export function providerFromEnv(modelOverride?: string): ModelProvider | null {
   const model = modelOverride ?? process.env["MEMBOOK_MODEL"];
 
   if (process.env["ANTHROPIC_API_KEY"]) {
-    provider = new AnthropicProvider({
+    return new AnthropicProvider({
       apiKey: process.env["ANTHROPIC_API_KEY"],
       ...(model ? { model } : {}),
     });
-  } else if (process.env["OPENAI_API_KEY"]) {
-    provider = new OpenAiCompatibleProvider({
+  }
+  if (process.env["OPENAI_API_KEY"]) {
+    return new OpenAiCompatibleProvider({
       apiKey: process.env["OPENAI_API_KEY"],
       ...(model ? { model } : {}),
       ...(process.env["OPENAI_BASE_URL"]
@@ -138,7 +290,15 @@ export function recheckerFromEnv(
         : {}),
     });
   }
+  return null;
+}
 
+export function recheckerFromEnv(
+  root: string,
+  instrumentation?: Instrumentation,
+  modelOverride?: string
+): AnchorRechecker | null {
+  const provider = providerFromEnv(modelOverride);
   if (!provider) return null;
 
   return new LlmRechecker({
@@ -353,10 +513,16 @@ export async function remember(options: RememberOptions): Promise<void> {
 
   // A memory anchored to a path absent from its own commit can never be
   // verified; the usual cause is a file that has not been committed yet.
-  const missing = await findMissingAnchorPaths(options.root, commit, options.paths);
+  const missing = await findMissingAnchorPaths(
+    options.root,
+    commit,
+    options.paths
+  );
   if (missing.length > 0) {
     die(
-      `${missing.join(", ")} ${missing.length === 1 ? "does" : "do"} not exist at HEAD (${commit.slice(0, 7)}).`,
+      `${missing.join(", ")} ${
+        missing.length === 1 ? "does" : "do"
+      } not exist at HEAD (${commit.slice(0, 7)}).`,
       "Commit the file first, or anchor to a path that is already committed — a memory anchored to an uncommitted file cannot be verified."
     );
   }

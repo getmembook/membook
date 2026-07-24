@@ -29,6 +29,22 @@ export const RANKING = {
   /** Drop anything scoring below this fraction of the best hit. */
   floorRatio: 0.25,
 
+  /**
+   * Absolute floor for context nobody asked for.
+   *
+   * Measured against three memories and eleven queries, once coverage counted
+   * whole words: a strong match scores ~1.25, a genuinely relevant question
+   * lands between 0.62 and 0.94, and every unrelated query scores exactly 0.
+   * The gap between "relevant" and "noise" is therefore wide and empty, and
+   * this sits in the middle of it — low enough to keep the weakest real match,
+   * high enough that nothing else survives.
+   *
+   * The value is not delicate; the DECISION is. Silence is the correct and
+   * common answer for a surface that fires on every prompt, so when this is
+   * wrong it should be wrong toward saying nothing.
+   */
+  pushFloor: 0.4,
+
   /** Half-life for recency decay. */
   recencyHalfLifeDays: 90,
 
@@ -51,7 +67,113 @@ export interface RecallAnchor {
 }
 
 /**
- * Query terms, lowercased, for coverage scoring.
+ * Words carrying no signal about what is being asked.
+ *
+ * Kept deliberately short — only words that are nearly always noise. An
+ * aggressive list would silently drop real query terms, and unlike a missed
+ * stopword that costs precision, a dropped content word costs the answer.
+ *
+ * They matter because coverage is a RATIO: with stopwords counted, a memory
+ * matching only `the` in a five-word question scores the same 20% coverage as
+ * one matching a genuinely rare term.
+ */
+const STOPWORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "but",
+  "if",
+  "then",
+  "than",
+  "that",
+  "this",
+  "these",
+  "those",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "am",
+  "do",
+  "does",
+  "did",
+  "doing",
+  "have",
+  "has",
+  "had",
+  "of",
+  "to",
+  "in",
+  "on",
+  "at",
+  "by",
+  "for",
+  "with",
+  "about",
+  "as",
+  "from",
+  "into",
+  "it",
+  "its",
+  "we",
+  "you",
+  "your",
+  "our",
+  "my",
+  "me",
+  "us",
+  "he",
+  "she",
+  "they",
+  "them",
+  "i",
+  "what",
+  "which",
+  "who",
+  "whom",
+  "when",
+  "where",
+  "why",
+  "how",
+  "can",
+  "will",
+  "would",
+  "should",
+  "could",
+  "may",
+  "might",
+  "must",
+  "not",
+  "no",
+  "so",
+  "up",
+  "out",
+  "over",
+  "under",
+  "again",
+  "here",
+  "there",
+  "all",
+  "any",
+  "some",
+  "please",
+  "just",
+  "now",
+  "get",
+  "got",
+  "make",
+  "made",
+  "let",
+  "lets",
+]);
+
+/**
+ * Query terms, lowercased and stripped of stopwords, for coverage scoring.
  *
  * BM25 alone is a poor precision signal here: under OR matching, a memory
  * that hits ONE rare term of a four-term query can outscore its actual
@@ -60,7 +182,7 @@ export interface RecallAnchor {
  * memory actually speak to?
  */
 export function queryTerms(query: string): string[] {
-  return [
+  const terms = [
     ...new Set(
       query
         .toLowerCase()
@@ -68,12 +190,50 @@ export function queryTerms(query: string): string[] {
         .filter((t) => t.length > 1)
     ),
   ];
+  const content = terms.filter((t) => !STOPWORDS.has(t));
+  // A query made entirely of stopwords keeps them: dividing by zero terms
+  // would report perfect coverage for everything, which is worse than noise.
+  return content.length > 0 ? content : terms;
 }
 
+/**
+ * WHOLE WORDS ONLY.
+ *
+ * Substring matching looks equivalent and is not: `me` matches inside `timer`,
+ * `is` inside `sessions`, `on` inside `boundary`. Measured, that gave three
+ * completely unrelated queries — a haiku request, a weather question, a CSS
+ * refactor — the *same* non-zero coverage against a memory about auth tokens.
+ *
+ * That is invisible while the floor is relative, because the best of several
+ * bad hits still wins. It stops being invisible the moment anything decides
+ * "is this good enough to show unasked", which is what a hook does on every
+ * prompt.
+ *
+ * KNOWN LIMITATION: no stemming, so `idempotency` does not match a memory
+ * saying `idempotent` — measured, that query scores 0. Substring matching did
+ * not solve this either (the query term is the longer word), so this is a
+ * pre-existing gap rather than a regression. Left for the dogfood period to
+ * judge: stemming trades a real miss against a class of false positives, and
+ * that trade should be made on logged misses, not on taste.
+ */
 export function termCoverage(body: string, terms: readonly string[]): number {
   if (terms.length === 0) return 1;
-  const haystack = body.toLowerCase();
-  return terms.filter((t) => haystack.includes(t)).length / terms.length;
+  const words = new Set(
+    body
+      .toLowerCase()
+      .split(/[^a-z0-9_./-]+/)
+      .filter(Boolean)
+  );
+  const matches = terms.filter(
+    (t) =>
+      words.has(t) ||
+      // Path-ish terms still match as substrings: a query for `auth.ts` should
+      // hit a memory naming `src/auth.ts`, and word splitting alone will not.
+      (t.includes("/") || t.includes(".")
+        ? body.toLowerCase().includes(t)
+        : false)
+  );
+  return matches.length / terms.length;
 }
 
 export interface RecallHit {
@@ -103,6 +263,20 @@ export interface RecallOptions {
   contextPaths?: readonly string[];
   /** Overrides the relative floor. */
   floorRatio?: number;
+  /**
+   * An ABSOLUTE score floor, applied alongside the relative one.
+   *
+   * The relative floor answers "which of these is best". It cannot answer "is
+   * any of these good enough", because the top hit always clears a fraction of
+   * itself — so with a relative floor alone, a query matching nothing well
+   * still returns its least-bad match.
+   *
+   * That is the right behaviour when an agent ASKED: it wants the best
+   * available answer and can discard it. It is the wrong behaviour for
+   * anything that injects context unasked, where the reader cannot tell where
+   * a line came from and cannot discount it. Push surfaces set this.
+   */
+  minScore?: number;
   /** Injected for deterministic tests. */
   now?: Date;
 }
@@ -267,7 +441,7 @@ export function recall(
   scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
 
   const top = scored[0]!.score;
-  const floor = top * floorRatio;
+  const floor = Math.max(top * floorRatio, options.minScore ?? 0);
   const kept: RecallHit[] = [];
   for (const hit of scored) {
     if (hit.score <= 0 || hit.score < floor) {

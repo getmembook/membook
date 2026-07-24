@@ -86,10 +86,68 @@ async function ensureAgentPointer(
   return null;
 }
 
+/**
+ * HOOKS ARE OPT-IN, AND STAY OPT-IN.
+ *
+ * A `UserPromptSubmit` hook is the only mechanism that removes the agent's
+ * choice to ask — measured, that choice is the failure point. But hooks are
+ * Claude Code-specific, and zero-integration portability through `MEMBOOK.md`
+ * is a deliberate, marketed property. Turning them on by default would trade a
+ * standard for one vendor's convenience.
+ *
+ * So the portable path stays primary and this is an accelerant, requested
+ * explicitly, written where the user can see and delete it.
+ */
+const HOOK_COMMAND = "membook hook prompt";
+
+interface ClaudeSettings {
+  hooks?: Record<string, unknown[]>;
+  [key: string]: unknown;
+}
+
+async function ensureHooks(
+  root: string
+): Promise<"added" | "present" | "conflict"> {
+  const dir = join(root, ".claude");
+  const path = join(dir, "settings.json");
+
+  let settings: ClaudeSettings = {};
+  if (existsSync(path)) {
+    const current = await readFile(path, "utf8");
+    if (current.includes(HOOK_COMMAND)) return "present";
+    try {
+      settings = JSON.parse(current) as ClaudeSettings;
+    } catch {
+      // Never rewrite a file we cannot parse: someone else's settings are not
+      // ours to reformat, and clobbering them to add a feature is unforgivable.
+      return "conflict";
+    }
+  }
+
+  const hooks = settings.hooks ?? {};
+  const existing = Array.isArray(hooks["UserPromptSubmit"])
+    ? (hooks["UserPromptSubmit"] as unknown[])
+    : [];
+
+  settings.hooks = {
+    ...hooks,
+    UserPromptSubmit: [
+      ...existing,
+      { hooks: [{ type: "command", command: HOOK_COMMAND }] },
+    ],
+  };
+
+  await mkdir(dir, { recursive: true });
+  await writeFile(path, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  return "added";
+}
+
 export interface InitOptions {
   root: string;
   /** Write output through this, so tests can capture it. */
   log?: (line: string) => void;
+  /** Install the Claude Code recall hook. Off unless asked for. */
+  hooks?: boolean;
 }
 
 export async function init(options: InitOptions): Promise<void> {
@@ -151,6 +209,26 @@ export async function init(options: InitOptions): Promise<void> {
   } else {
     log(ok(`${pointer.file} already points at Membook, left alone`));
   }
+
+  if (options.hooks === true) {
+    const hooks = await ensureHooks(root);
+    if (hooks === "conflict") {
+      log(
+        dim(
+          "  .claude/settings.json exists but could not be parsed, so it was left untouched. Add the hook by hand if you want it."
+        )
+      );
+    } else if (hooks === "added") {
+      log(
+        ok(
+          "Installed a recall hook in .claude/settings.json — Claude Code will consult memory on every prompt"
+        )
+      );
+    } else {
+      log(ok(".claude/settings.json already has the recall hook, left alone"));
+    }
+  }
+
   log("");
   log(heading("Connect your agent"));
   log("");

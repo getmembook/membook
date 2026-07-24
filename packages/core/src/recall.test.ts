@@ -301,3 +301,100 @@ describe("INVARIANT: relevance gates, other signals only modulate", () => {
     expect(RANKING.boostRecency).toBeLessThan(1);
   });
 });
+
+/**
+ * Found while building the recall hook, and the deeper of two bugs behind it.
+ *
+ * Coverage was substring-based, so `me` matched inside `timer` and `is` inside
+ * `sessions`. Measured against one memory about auth tokens, three unrelated
+ * queries — a haiku request, a weather question, a CSS refactor — all scored
+ * an identical 0.2499. A relative floor hides that completely, because the
+ * best of several bad hits still wins.
+ */
+describe("coverage counts whole words, not substrings", () => {
+  beforeEach(async () => {
+    await seed({
+      body: "Auth tokens refresh on the request boundary, not on a timer, or sessions expire mid-flight.",
+      paths: ["src/auth.ts"],
+    });
+  });
+
+  it("does not credit a term that is merely inside another word", async () => {
+    // Each is a strict substring of a word in the memory and a word in none
+    // of it: `ok` ⊂ `tokens`, `time` ⊂ `timer`, `bound` ⊂ `boundary`.
+    const { hits } = await membook.recall("ok time bound", { now: NOW });
+    expect(hits).toHaveLength(0);
+  });
+
+  it("still matches a path-shaped term inside a longer path", async () => {
+    const { hits } = await membook.recall("auth.ts refresh boundary", {
+      now: NOW,
+    });
+    expect(hits).toHaveLength(1);
+  });
+
+  it("scores a real match far above an unrelated one", async () => {
+    const good = await membook.recall("auth token refresh boundary timer", {
+      now: NOW,
+    });
+    const bad = await membook.recall("write me a haiku about kubernetes", {
+      now: NOW,
+    });
+    expect(good.hits[0]!.score).toBeGreaterThan(0.5);
+    expect(bad.hits[0]?.score ?? 0).toBeLessThan(RANKING.pushFloor);
+  });
+
+  it("ignores stopwords when computing coverage", async () => {
+    // Without stopword filtering, `the` alone gives 1/5 coverage and a score
+    // indistinguishable from a genuine partial match.
+    const { hits } = await membook.recall("what is the weather today", {
+      now: NOW,
+    });
+    expect(hits).toHaveLength(0);
+  });
+
+  it("keeps stopwords when the query is nothing else", async () => {
+    // Dividing by zero terms would report perfect coverage for everything.
+    const { hits } = await membook.recall("what is the", { now: NOW });
+    expect(hits.length).toBeLessThanOrEqual(1);
+  });
+});
+
+/**
+ * The relative floor answers "which of these is best" and cannot answer "is
+ * any of these good enough" — the top hit always clears a fraction of itself.
+ * Anything injecting context unasked needs the second question answered.
+ */
+describe("the absolute floor", () => {
+  beforeEach(async () => {
+    await seed({
+      body: "Auth tokens refresh on the request boundary, not on a timer, or sessions expire mid-flight.",
+      paths: ["src/auth.ts"],
+    });
+  });
+
+  it("withholds a weak match that the relative floor would serve", async () => {
+    // One term of four matches, so coverage is 0.25 and the score lands well
+    // below what unrequested context should clear — yet it is the only hit,
+    // so a relative floor serves it happily.
+    const query = "tokens kubernetes helm ingress";
+
+    const relative = await membook.recall(query, { now: NOW });
+    expect(relative.hits).toHaveLength(1);
+
+    const absolute = await membook.recall(query, {
+      now: NOW,
+      minScore: RANKING.pushFloor,
+    });
+    expect(absolute.hits).toHaveLength(0);
+    expect(absolute.withheld.belowFloor).toBe(1);
+  });
+
+  it("still serves a strong match", async () => {
+    const { hits } = await membook.recall(
+      "auth tokens refresh request boundary timer sessions",
+      { now: NOW, minScore: RANKING.pushFloor }
+    );
+    expect(hits).toHaveLength(1);
+  });
+});

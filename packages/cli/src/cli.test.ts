@@ -11,12 +11,16 @@ import {
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Membook } from "@membook/core";
+import { Membook, type ModelProvider } from "@membook/core";
 import { init } from "./commands/init.js";
 import { status } from "./commands/status.js";
 import { review } from "./commands/review.js";
+import { seed } from "./commands/seed.js";
+import { distill } from "./commands/distill.js";
+import { HOOK_MAX_HITS, hookPrompt } from "./commands/hook.js";
 import {
   book,
+  recall,
   recheckerFromEnv,
   reindex,
   remember,
@@ -32,6 +36,24 @@ const flat = (): string => output().replace(/\s+/g, " ");
 
 async function git(dir: string, args: string[]): Promise<void> {
   await execa("git", args, { cwd: dir });
+}
+
+/**
+ * The local event log, parsed.
+ *
+ * Read from disk rather than through a spy on purpose: the bugs this catches
+ * are commands that build a correct event and hand it to a null sink, which a
+ * spy injected by the test would hide.
+ */
+async function readEvents(
+  dir: string
+): Promise<Array<Record<string, unknown> & { event: string }>> {
+  const file = join(dir, ".membook/telemetry/events.jsonl");
+  if (!existsSync(file)) return [];
+  return (await readFile(file, "utf8"))
+    .split("\n")
+    .filter((l) => l.trim() !== "")
+    .map((l) => JSON.parse(l));
 }
 
 beforeEach(async () => {
@@ -423,6 +445,47 @@ describe("review", () => {
     expect(await new Membook(root).store.listIds()).toHaveLength(0);
   });
 
+  /**
+   * A human decision is the only ground truth in the log, and re-check
+   * accuracy is computable only against it. Found by dogfooding: `review`
+   * wrote statuses through the store and recorded nothing at all, so every
+   * ratification — the strongest signal available — was invisible.
+   *
+   * These assert on the log FILE, not on a spy: the original bug was an
+   * event that was faithfully constructed and then handed to a null sink.
+   */
+  it("records a ratification as ground truth", async () => {
+    await seed();
+    await review({ root, log, ask: async () => "k" });
+
+    const events = await readEvents(root);
+    const reviewed = events.filter((e) => e.event === "review");
+    expect(reviewed).toHaveLength(1);
+    expect(reviewed[0]!.action).toBe("ratify");
+    expect(reviewed[0]!.from).toBe("unverified");
+  });
+
+  it("records a deletion, with the status the human overrode", async () => {
+    await seed();
+    await review({ root, log, ask: async () => "d" });
+
+    const reviewed = (await readEvents(root)).filter(
+      (e) => e.event === "review"
+    );
+    expect(reviewed).toHaveLength(1);
+    expect(reviewed[0]!.action).toBe("delete");
+    // Recorded before the delete, or the status would be unrecoverable.
+    expect(reviewed[0]!.from).toBe("unverified");
+  });
+
+  it("records nothing when the human skips", async () => {
+    await seed();
+    await review({ root, log, ask: async () => "s" });
+    expect(
+      (await readEvents(root)).filter((e) => e.event === "review")
+    ).toHaveLength(0);
+  });
+
   it("skipping leaves it alone", async () => {
     await seed();
     await review({ root, log, ask: async () => "s" });
@@ -656,6 +719,664 @@ describe("model override", () => {
   });
 });
 
+/**
+ * Retrieval precision is the binding constraint, and before this command it
+ * was unobservable without an agent choosing to ask. These tests are about
+ * what a human is told, especially when the answer is empty — an empty result
+ * has two very different causes and they call for opposite responses.
+ */
+describe("recall", () => {
+  async function seed(): Promise<void> {
+    await init({ root, log });
+    await remember({
+      root,
+      statement:
+        "Auth tokens refresh on the request boundary, not on a timer, or sessions expire mid-flight.",
+      type: "gotcha",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    lines = [];
+  }
+
+  it("serves a relevant memory with its anchor and score", async () => {
+    await seed();
+    await recall({ root, query: "auth token refresh boundary", log });
+    expect(flat()).toContain("request boundary");
+    expect(output()).toContain("src/auth.ts");
+    expect(output()).toContain("score");
+  });
+
+  it("says plainly when nothing is recorded", async () => {
+    await seed();
+    await recall({ root, query: "kubernetes ingress annotations", log });
+    expect(flat()).toContain("Nothing recorded for that query");
+  });
+
+  // The distinction the whole product turns on. A human told "nothing known"
+  // when the truth is "known but drifted" will go and re-derive it.
+  it("distinguishes drifted from unknown, and offers the flag", async () => {
+    await seed();
+    await writeFile(join(root, "src/auth.ts"), "export const a = 2;\n", "utf8");
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "change auth"]);
+    await verify({ root, log });
+    lines = [];
+
+    await recall({ root, query: "auth token refresh boundary", log });
+    expect(flat()).toContain("Nothing usable for that query");
+    expect(flat()).toContain("stale");
+    expect(flat()).toContain("--include-stale");
+    expect(flat()).not.toContain("Nothing recorded");
+  });
+
+  /**
+   * Caught on a live repo minutes after this command was written: only `stale`
+   * was counted, so a memory whose anchored file had been DELETED reported as
+   * "nothing recorded" — the very confusion the command exists to prevent,
+   * one status over. Invalidated memories are never served, but their
+   * existence is a fact the reader needs.
+   */
+  it("reports an invalidated memory rather than claiming nothing is known", async () => {
+    await seed();
+    await git(root, ["rm", "-q", "src/auth.ts"]);
+    await git(root, ["commit", "-m", "delete auth"]);
+    await verify({ root, log });
+    lines = [];
+
+    await recall({ root, query: "auth token refresh boundary", log });
+    expect(flat()).toContain("Nothing usable for that query");
+    expect(flat()).toContain("invalidated");
+    expect(flat()).not.toContain("Nothing recorded");
+  });
+
+  it("serves the drifted memory when asked", async () => {
+    await seed();
+    await writeFile(join(root, "src/auth.ts"), "export const a = 2;\n", "utf8");
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "change auth"]);
+    await verify({ root, log });
+    lines = [];
+
+    await recall({
+      root,
+      query: "auth token refresh boundary",
+      includeStale: true,
+      log,
+    });
+    expect(flat()).toContain("request boundary");
+  });
+
+  // Same log the MCP path writes to: a human checking retrieval is a recall
+  // event, and excluding it would understate how much recall actually happens.
+  it("records the recall, so hit rate counts human queries too", async () => {
+    await seed();
+    await recall({ root, query: "auth token refresh boundary", log });
+
+    const events = (await readEvents(root)).filter((e) => e.event === "recall");
+    expect(events).toHaveLength(1);
+    expect(events[0]!.served).toBe(1);
+  });
+
+  it("redacts a credential typed into the query", async () => {
+    await seed();
+    const { FAKE_SECRETS } = await import("@membook/core");
+    await recall({
+      root,
+      query: `why does ${FAKE_SECRETS.githubToken} not work`,
+      log,
+    });
+
+    const events = (await readEvents(root)).filter((e) => e.event === "recall");
+    expect(events[0]!.query).toBe("[redacted]");
+  });
+});
+
+/**
+ * Seeding is the cold-start fix: without it a fresh `init` produces an empty
+ * book and the tool is worth nothing until an agent volunteers to write
+ * something, which measurement says does not happen.
+ *
+ * The tests that matter are about what it REFUSES, and about the fact that
+ * everything it writes is unverified and lands in front of a human.
+ */
+describe("seed", () => {
+  const provider = (replies: string[]): ModelProvider => {
+    let i = 0;
+    return {
+      name: "fake",
+      model: "fake-model",
+      async complete() {
+        const text = replies[i] ?? replies.at(-1) ?? "";
+        i += 1;
+        return { text, inputTokens: 5, outputTokens: 5 };
+      },
+    };
+  };
+
+  const memories = (items: unknown[]): string =>
+    JSON.stringify({ memories: items });
+
+  async function withDoc(body: string): Promise<void> {
+    await init({ root, log });
+    await writeFile(join(root, "ARCHITECTURE.md"), body, "utf8");
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "docs"]);
+    lines = [];
+  }
+
+  const LONG = `# Architecture\n\n${"Context about this project. ".repeat(40)}`;
+
+  it("records a candidate as unverified, for a human to decide", async () => {
+    await withDoc(LONG);
+    await seed({
+      root,
+      log,
+      provider: provider([
+        memories([
+          {
+            statement:
+              "Requests are authenticated at the edge, never inside a service.",
+            type: "decision",
+            paths: ["ARCHITECTURE.md"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+
+    const membook = new Membook(root);
+    const [id] = await membook.store.listIds();
+    const fm = (await membook.store.read(id!)).memfile.frontmatter;
+    expect(fm.status).toBe("unverified");
+    expect(flat()).toContain("membook review");
+  });
+
+  // `origin: distilled` requires a source_hash, and it must be the hash of
+  // exactly what the model read — that is what makes the memory auditable.
+  it("records distilled provenance hashing what the model read", async () => {
+    await withDoc(LONG);
+    await seed({
+      root,
+      log,
+      provider: provider([
+        memories([
+          {
+            statement:
+              "Requests are authenticated at the edge, never inside a service.",
+            type: "decision",
+            paths: ["ARCHITECTURE.md"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+
+    const membook = new Membook(root);
+    const [id] = await membook.store.listIds();
+    const { provenance } = (await membook.store.read(id!)).memfile.frontmatter;
+    expect(provenance.origin).toBe("distilled");
+    const { sourceHash } = await import("@membook/core");
+    if (provenance.origin === "distilled") {
+      expect(provenance.source_hash).toBe(sourceHash(LONG));
+    }
+  });
+
+  it("writes nothing on a dry run", async () => {
+    await withDoc(LONG);
+    await seed({
+      root,
+      log,
+      dryRun: true,
+      provider: provider([
+        memories([
+          {
+            statement: "Requests are authenticated at the edge.",
+            type: "decision",
+            paths: ["ARCHITECTURE.md"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+
+    expect(await new Membook(root).store.listIds()).toHaveLength(0);
+    expect(flat()).toContain("Dry run");
+  });
+
+  it("refuses a candidate anchored to a file that does not exist", async () => {
+    await withDoc(LONG);
+    await seed({
+      root,
+      log,
+      provider: provider([
+        memories([
+          {
+            statement: "The scheduler retries with jitter, not a fixed delay.",
+            type: "gotcha",
+            paths: ["src/scheduler-that-does-not-exist.ts"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+
+    expect(await new Membook(root).store.listIds()).toHaveLength(0);
+    expect(flat()).toContain("cited a file that does not exist");
+  });
+
+  it("treats keeping nothing as a correct outcome, not a failure", async () => {
+    await withDoc(LONG);
+    await seed({ root, log, provider: provider([memories([])]) });
+
+    expect(flat()).toContain("Nothing worth recording");
+    expect(flat()).toContain("Rejection is the default");
+  });
+
+  it("says what to do when no model is configured", async () => {
+    await withDoc(LONG);
+    const saved = {
+      a: process.env["ANTHROPIC_API_KEY"],
+      o: process.env["OPENAI_API_KEY"],
+    };
+    delete process.env["ANTHROPIC_API_KEY"];
+    delete process.env["OPENAI_API_KEY"];
+    try {
+      await expect(seed({ root, log })).rejects.toThrow();
+    } finally {
+      if (saved.a !== undefined) process.env["ANTHROPIC_API_KEY"] = saved.a;
+      if (saved.o !== undefined) process.env["OPENAI_API_KEY"] = saved.o;
+    }
+  });
+
+  it("skips a stub too short to say anything", async () => {
+    await init({ root, log });
+    await writeFile(join(root, "NOTES.md"), "# Notes\n\nTBD.\n", "utf8");
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "stub"]);
+    lines = [];
+
+    await seed({ root, log, provider: provider([memories([])]) });
+    expect(flat()).toContain("No documentation found");
+  });
+
+  /** The whole point: seed feeds review, and review produces ground truth. */
+  it("hands its output to review, which ratifies it", async () => {
+    await withDoc(LONG);
+    await seed({
+      root,
+      log,
+      provider: provider([
+        memories([
+          {
+            statement:
+              "Requests are authenticated at the edge, never inside a service.",
+            type: "decision",
+            paths: ["ARCHITECTURE.md"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+    lines = [];
+
+    await review({ root, log, ask: async () => "k" });
+
+    const membook = new Membook(root);
+    const [id] = await membook.store.listIds();
+    expect((await membook.store.read(id!)).memfile.frontmatter.status).toBe(
+      "verified"
+    );
+    const reviewed = (await readEvents(root)).filter(
+      (e) => e.event === "review"
+    );
+    expect(reviewed[0]!.action).toBe("ratify");
+  });
+});
+
+/**
+ * The write side of the volition problem. `remember` asks an agent to notice
+ * it learned something, judge it durable, phrase it, and pick anchors — four
+ * judgements at the moment it is trying to finish. Distillation moves the bar
+ * to "say what happened" and makes those judgements here, where rejection is
+ * the default.
+ */
+describe("distill", () => {
+  const provider = (replies: string[]): ModelProvider => {
+    let i = 0;
+    return {
+      name: "fake",
+      model: "fake-model",
+      async complete() {
+        const text = replies[i] ?? replies.at(-1) ?? "";
+        i += 1;
+        return { text, inputTokens: 5, outputTokens: 5 };
+      },
+    };
+  };
+
+  const memories = (items: unknown[]): string =>
+    JSON.stringify({ memories: items });
+
+  const NOTES = `Spent the session on the auth module. ${"Details about what happened. ".repeat(
+    10
+  )}`;
+
+  it("records a candidate as unverified", async () => {
+    await init({ root, log });
+    lines = [];
+    await distill({
+      root,
+      log,
+      readInput: async () => NOTES,
+      provider: provider([
+        memories([
+          {
+            statement:
+              "Token refresh must happen on the request boundary; a timer drifts and expires sessions mid-flight.",
+            type: "gotcha",
+            paths: ["src/auth.ts"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+
+    const membook = new Membook(root);
+    const [id] = await membook.store.listIds();
+    expect((await membook.store.read(id!)).memfile.frontmatter.status).toBe(
+      "unverified"
+    );
+  });
+
+  /**
+   * Notes are not a repo file, so unlike seeding there is NO fallback anchor.
+   * Every anchor must come from the model and survive grounding, or the
+   * memory would be unverifiable forever.
+   */
+  it("discards a candidate citing a file that does not exist", async () => {
+    await init({ root, log });
+    lines = [];
+    await distill({
+      root,
+      log,
+      readInput: async () => NOTES,
+      provider: provider([
+        memories([
+          {
+            statement: "The scheduler retries with jitter, not a fixed delay.",
+            type: "gotcha",
+            paths: ["src/imaginary.ts"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+
+    expect(await new Membook(root).store.listIds()).toHaveLength(0);
+    expect(flat()).toContain("cited a file that does not exist");
+  });
+
+  it("treats an empty session as a correct outcome", async () => {
+    await init({ root, log });
+    lines = [];
+    await distill({
+      root,
+      log,
+      readInput: async () => NOTES,
+      provider: provider([memories([])]),
+    });
+
+    expect(flat()).toContain("Nothing worth recording");
+    expect(await new Membook(root).store.listIds()).toHaveLength(0);
+  });
+
+  it("refuses notes too short to contain a memory", async () => {
+    await init({ root, log });
+    lines = [];
+    await expect(
+      distill({
+        root,
+        log,
+        readInput: async () => "fixed a typo",
+        provider: provider([memories([])]),
+      })
+    ).rejects.toThrow();
+  });
+
+  // A failed distillation must cost the user nothing, and must not be
+  // reported as "nothing worth recording" — those are different facts.
+  it("distinguishes a model failure from an empty result", async () => {
+    await init({ root, log });
+    lines = [];
+    await distill({
+      root,
+      log,
+      readInput: async () => NOTES,
+      provider: provider(["not json", "still not json"]),
+    });
+
+    expect(flat()).toContain("did not return anything usable");
+    expect(flat()).not.toContain("Nothing worth recording");
+    expect(await new Membook(root).store.listIds()).toHaveLength(0);
+  });
+
+  it("writes nothing on a dry run", async () => {
+    await init({ root, log });
+    lines = [];
+    await distill({
+      root,
+      log,
+      dryRun: true,
+      readInput: async () => NOTES,
+      provider: provider([
+        memories([
+          {
+            statement: "Token refresh happens on the request boundary.",
+            type: "gotcha",
+            paths: ["src/auth.ts"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+
+    expect(await new Membook(root).store.listIds()).toHaveLength(0);
+    expect(flat()).toContain("Dry run");
+  });
+
+  it("does not record something already known", async () => {
+    await init({ root, log });
+    await remember({
+      root,
+      statement: "Token refresh happens on the request boundary.",
+      type: "gotcha",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    lines = [];
+
+    await distill({
+      root,
+      log,
+      readInput: async () => NOTES,
+      provider: provider([
+        memories([
+          {
+            statement: "Token refresh happens on the request boundary.",
+            type: "gotcha",
+            paths: ["src/auth.ts"],
+            confidence: 0.9,
+          },
+        ]),
+      ]),
+    });
+
+    expect(await new Membook(root).store.listIds()).toHaveLength(1);
+    expect(flat()).toContain("already recorded");
+  });
+});
+
+/**
+ * The hook removes the agent's choice to ask, which measurement says is the
+ * failure point. Its non-negotiable property is that it can never break a
+ * session: a memory tool that wedges someone's editor is not a memory tool.
+ */
+describe("recall hook", () => {
+  const event = (prompt: string): string => JSON.stringify({ prompt });
+
+  async function seeded(): Promise<void> {
+    await init({ root, log });
+    await remember({
+      root,
+      statement:
+        "Auth tokens refresh on the request boundary, not on a timer, or sessions expire mid-flight.",
+      type: "gotcha",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    lines = [];
+  }
+
+  it("injects a relevant memory", async () => {
+    await seeded();
+    await hookPrompt({
+      root,
+      log,
+      readInput: async () => event("why do auth tokens refresh oddly here"),
+    });
+    expect(flat()).toContain("request boundary");
+    expect(flat()).toContain("Membook");
+  });
+
+  it("stays silent when it has nothing to say", async () => {
+    await seeded();
+    await hookPrompt({
+      root,
+      log,
+      readInput: async () => event("write me a haiku about kubernetes"),
+    });
+    expect(output()).toBe("");
+  });
+
+  it("ignores a prompt too short to be a query", async () => {
+    await seeded();
+    await hookPrompt({ root, log, readInput: async () => event("hi") });
+    expect(output()).toBe("");
+  });
+
+  // Unrequested context has to be trustworthy: the agent cannot tell where an
+  // injected line came from, so it cannot discount a stale one.
+  it("never injects a stale memory", async () => {
+    await seeded();
+    await writeFile(join(root, "src/auth.ts"), "export const a = 3;\n", "utf8");
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "change auth"]);
+    await verify({ root, log });
+    lines = [];
+
+    await hookPrompt({
+      root,
+      log,
+      readInput: async () => event("why do auth tokens refresh oddly here"),
+    });
+    expect(output()).toBe("");
+  });
+
+  it("caps how much it injects", async () => {
+    await init({ root, log });
+    for (let i = 0; i < 8; i += 1) {
+      await remember({
+        root,
+        statement: `Auth boundary rule number ${i}: tokens refresh on the request boundary every time.`,
+        type: "gotcha",
+        paths: ["src/auth.ts"],
+        log,
+      });
+    }
+    lines = [];
+
+    await hookPrompt({
+      root,
+      log,
+      readInput: async () => event("auth tokens refresh request boundary"),
+    });
+    expect(
+      output()
+        .split("\n")
+        .filter((l) => l.startsWith("- "))
+    ).toHaveLength(HOOK_MAX_HITS);
+  });
+
+  it("says nothing on malformed input rather than failing", async () => {
+    await seeded();
+    await expect(
+      hookPrompt({ root, log, readInput: async () => "not json" })
+    ).resolves.toBeUndefined();
+    expect(output()).toBe("");
+  });
+
+  it("says nothing in a repository with no memories at all", async () => {
+    await expect(
+      hookPrompt({
+        root,
+        log,
+        readInput: async () => event("anything at all about this project"),
+      })
+    ).resolves.toBeUndefined();
+    expect(output()).toBe("");
+  });
+});
+
+describe("init --hooks", () => {
+  const settingsPath = (): string => join(root, ".claude/settings.json");
+
+  it("does not install hooks unless asked", async () => {
+    await init({ root, log });
+    expect(existsSync(settingsPath())).toBe(false);
+  });
+
+  it("installs the hook when asked, and says so", async () => {
+    await init({ root, log, hooks: true });
+    const settings = JSON.parse(await readFile(settingsPath(), "utf8"));
+    expect(JSON.stringify(settings)).toContain("membook hook prompt");
+    expect(flat()).toContain("recall hook");
+  });
+
+  it("is idempotent", async () => {
+    await init({ root, log, hooks: true });
+    await init({ root, log, hooks: true });
+    const settings = JSON.parse(await readFile(settingsPath(), "utf8"));
+    expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  it("preserves settings that are already there", async () => {
+    await mkdir(join(root, ".claude"), { recursive: true });
+    await writeFile(
+      settingsPath(),
+      JSON.stringify({ model: "opus", hooks: { Stop: [{ existing: true }] } }),
+      "utf8"
+    );
+
+    await init({ root, log, hooks: true });
+    const settings = JSON.parse(await readFile(settingsPath(), "utf8"));
+    expect(settings.model).toBe("opus");
+    expect(settings.hooks.Stop).toHaveLength(1);
+    expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  // Someone else's settings file is not ours to reformat, and clobbering it to
+  // add a feature they can live without would be indefensible.
+  it("refuses to rewrite a settings file it cannot parse", async () => {
+    await mkdir(join(root, ".claude"), { recursive: true });
+    await writeFile(settingsPath(), "{ this is not json", "utf8");
+
+    await init({ root, log, hooks: true });
+    expect(await readFile(settingsPath(), "utf8")).toBe("{ this is not json");
+    expect(flat()).toContain("could not be parsed");
+  });
+});
+
 describe("book and reindex", () => {
   it("book reports what it carried and what it withheld", async () => {
     await init({ root, log });
@@ -669,6 +1390,29 @@ describe("book and reindex", () => {
     lines = [];
     await book({ root, log });
     expect(output()).toContain("Wrote MEMBOOK.md");
+  });
+
+  /**
+   * How much the book carried and how much it withheld are the numbers the
+   * honesty claim rests on. Found by dogfooding: `book` opened an
+   * uninstrumented Membook, so on every human run the event was built and
+   * dropped, and the log showed the book had never been compiled.
+   */
+  it("book records what it carried, so the claim is checkable", async () => {
+    await init({ root, log });
+    await remember({
+      root,
+      statement: "Auth tokens refresh on the request boundary.",
+      type: "gotcha",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    await book({ root, log });
+
+    const events = (await readEvents(root)).filter((e) => e.event === "book");
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.at(-1)!.carried).toBe(1);
+    expect(events.at(-1)!.tokens).toBeGreaterThan(0);
   });
 
   it("reindex rebuilds from the files", async () => {

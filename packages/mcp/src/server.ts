@@ -131,12 +131,33 @@ export function createServer(options: CreateServerOptions): McpServer {
         // Say WHY nothing came back. "No memories" and "memories exist but
         // none can be trusted" are different facts, and an agent that cannot
         // tell them apart will confidently re-derive something known-broken.
+        // Both drifted statuses count. Reporting only `stale` tells the agent
+        // "nothing recorded" when a memory exists whose anchored file was
+        // deleted — which is a fact the agent needs, and the opposite of none.
         const staleCount = withheld.byStatus["stale"] ?? 0;
+        const invalidCount = withheld.byStatus["invalidated"] ?? 0;
+        const parts: string[] = [];
+        if (staleCount > 0) {
+          parts.push(
+            `${staleCount} matching ${
+              staleCount === 1 ? "memory is" : "memories are"
+            } stale — the code they describe changed and they have not been re-verified. Re-run with include_stale to see them, and treat them as leads rather than fact.`
+          );
+        }
+        if (invalidCount > 0) {
+          // Never served, at any flag: the anchor is gone, so there is nothing
+          // left to check the statement against.
+          parts.push(
+            `${invalidCount} matching ${
+              invalidCount === 1 ? "memory was" : "memories were"
+            } invalidated — the code ${
+              invalidCount === 1 ? "it describes is" : "they describe is"
+            } gone. They are not served, but something was once known here.`
+          );
+        }
         const note =
-          staleCount > 0
-            ? `No usable memories for that query. ${staleCount} matching ${
-                staleCount === 1 ? "memory is" : "memories are"
-              } stale — the code they describe changed and they have not been re-verified. Re-run with include_stale to see them, and treat them as leads rather than fact.`
+          parts.length > 0
+            ? `No usable memories for that query. ${parts.join(" ")}`
             : "No memories recorded for that query.";
         return { content: [{ type: "text" as const, text: note }] };
       }

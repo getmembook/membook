@@ -77,6 +77,44 @@ export interface RecheckEvent {
   reason_grounded?: boolean;
 }
 
+/**
+ * A human decided a memory's fate in `membook review`.
+ *
+ * This is the only GROUND TRUTH in the log. Every other verification signal is
+ * a machine's opinion: the git diff says an anchor moved, the re-checker says
+ * it probably still holds. Only a person ratifying or deleting a memory
+ * settles whether it was actually true — so re-check accuracy is computable
+ * exactly to the extent that these events exist, and not at all otherwise.
+ *
+ * READING THE LOG: a `ratify` rewrites the memory file, so it also emits a
+ * `remember` event for the same id. Count writes over DISTINCT ids, not over
+ * `remember` events, or ratifications will inflate them.
+ */
+export interface ReviewEvent {
+  event: "review";
+  id: string;
+  action: "ratify" | "delete";
+  /** The status the human overrode, which is what makes the label meaningful. */
+  from: MemoryStatus;
+}
+
+/**
+ * One source distilled into candidate memories.
+ *
+ * `rejected` is the number that matters. Distillation rejects by default, so a
+ * run that keeps everything it was offered is evidence the gates are not
+ * working — not evidence of a good model.
+ */
+export interface DistillEvent {
+  event: "distill";
+  /** Repo-relative path of the source. Never its content. */
+  source: string;
+  kept: number;
+  rejected: number;
+  repaired?: boolean;
+  failed?: boolean;
+}
+
 export interface WriteBlockedEvent {
   event: "write_blocked";
   guard: string;
@@ -96,6 +134,8 @@ export type MembookEvent =
   | RememberEvent
   | VerifyEvent
   | RecheckEvent
+  | ReviewEvent
+  | DistillEvent
   | WriteBlockedEvent
   | BookEvent;
 
