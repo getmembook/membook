@@ -83,6 +83,25 @@ describe("tool surface", () => {
     expect(byName["remember"]!.annotations?.readOnlyHint).toBe(false);
   });
 
+  /**
+   * Measured in a real repo: `recall` fired once, `remember` never. Recall
+   * has a natural pull — "I need to know something". Nothing prompts "you
+   * just learned something, write it down", so the description has to.
+   */
+  it("tells the agent WHEN to record, not only what", async () => {
+    const { tools } = await client.listTools();
+    const remember = tools.find((t) => t.name === "remember")!;
+    expect(remember.description).toMatch(/as soon as you work out something/i);
+    expect(remember.description).toMatch(/before you finish a task/i);
+  });
+
+  it("gives session_digest a trigger at both ends of a session", async () => {
+    const { tools } = await client.listTools();
+    const digest = tools.find((t) => t.name === "session_digest")!;
+    expect(digest.description).toMatch(/at the start of a session/i);
+    expect(digest.description).toMatch(/at the end/i);
+  });
+
   it("tells the agent when NOT to record something", async () => {
     const { tools } = await client.listTools();
     const remember = tools.find((t) => t.name === "remember")!;

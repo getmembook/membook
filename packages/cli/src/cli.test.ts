@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execa } from "execa";
-import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  rm,
+  writeFile,
+  mkdir,
+  readFile,
+  symlink,
+} from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -79,6 +86,120 @@ describe("init", () => {
   it("tells the user how to connect an agent", async () => {
     await init({ root, log });
     expect(output()).toContain("@membook/mcp");
+  });
+});
+
+/**
+ * Measured in a real repo: after a full session, `recall` fired once and
+ * `remember` never. Recall has a natural pull — "I need to know something".
+ * Nothing in a session prompts "you just learned something, write it down",
+ * so the book stays empty, recall keeps returning nothing, and the agent
+ * stops asking. `init` sets up storage and leaves the hardest part — knowing
+ * when to use it — to the human.
+ *
+ * The pointer is one marked line, not a section: CLAUDE.md is shared team
+ * instruction, and a tool that injects opinionated prose into it is
+ * obnoxious.
+ */
+describe("agent pointer", () => {
+  const MARKER = "<!-- membook -->";
+
+  it("appends a marked pointer to CLAUDE.md", async () => {
+    await writeFile(
+      join(root, "CLAUDE.md"),
+      "# Project\n\nExisting guidance.\n",
+      "utf8"
+    );
+    await init({ root, log });
+
+    const md = await readFile(join(root, "CLAUDE.md"), "utf8");
+    expect(md).toContain(MARKER);
+    expect(md).toMatch(/MEMBOOK\.md/);
+    // Existing content survives byte-for-byte.
+    expect(md).toContain("# Project\n\nExisting guidance.\n");
+  });
+
+  it("prefers AGENTS.md when both exist, and writes only one", async () => {
+    await writeFile(join(root, "CLAUDE.md"), "# Claude\n", "utf8");
+    await writeFile(join(root, "AGENTS.md"), "# Agents\n", "utf8");
+    await init({ root, log });
+
+    expect(await readFile(join(root, "AGENTS.md"), "utf8")).toContain(MARKER);
+    expect(await readFile(join(root, "CLAUDE.md"), "utf8")).not.toContain(
+      MARKER
+    );
+  });
+
+  // D1: creating an agent-instruction file in a repo that deliberately has
+  // none is presumptuous. Skip and say so.
+  it("creates nothing when neither file exists", async () => {
+    await init({ root, log });
+    expect(existsSync(join(root, "CLAUDE.md"))).toBe(false);
+    expect(existsSync(join(root, "AGENTS.md"))).toBe(false);
+    expect(flat()).toMatch(/no CLAUDE\.md or AGENTS\.md/i);
+  });
+
+  /**
+   * Found in a real repo, not invented: `docs-repo` has CLAUDE.md as a
+   * symlink to AGENTS.md. Both "contain" the pointer because they are one
+   * file. AGENTS.md winning means we write to it by its real name and report
+   * it truthfully; had CLAUDE.md come first we would have written through the
+   * link and named the wrong file.
+   */
+  it("handles CLAUDE.md being a symlink to AGENTS.md", async () => {
+    await writeFile(join(root, "AGENTS.md"), "# Agents\n", "utf8");
+    await symlink("AGENTS.md", join(root, "CLAUDE.md"));
+
+    lines = [];
+    await init({ root, log });
+
+    const target = await readFile(join(root, "AGENTS.md"), "utf8");
+    expect(target.match(new RegExp(MARKER, "g"))).toHaveLength(1);
+    expect(flat()).toContain("AGENTS.md");
+
+    // And re-running still does not duplicate through the link.
+    await init({ root, log });
+    const after = await readFile(join(root, "AGENTS.md"), "utf8");
+    expect(after.match(new RegExp(MARKER, "g"))).toHaveLength(1);
+  });
+
+  it("is idempotent — a second init does not duplicate it", async () => {
+    await writeFile(join(root, "CLAUDE.md"), "# Project\n", "utf8");
+    await init({ root, log });
+    const once = await readFile(join(root, "CLAUDE.md"), "utf8");
+    await init({ root, log });
+    expect(await readFile(join(root, "CLAUDE.md"), "utf8")).toBe(once);
+  });
+
+  it("does not duplicate when the user has reworded the line", async () => {
+    await writeFile(
+      join(root, "CLAUDE.md"),
+      `# Project\n\n${MARKER}\nOur own wording about membook.\n`,
+      "utf8"
+    );
+    await init({ root, log });
+    const md = await readFile(join(root, "CLAUDE.md"), "utf8");
+    expect(md.match(new RegExp(MARKER, "g"))).toHaveLength(1);
+    expect(md).toContain("Our own wording about membook.");
+  });
+
+  it("appends cleanly to a file with no trailing newline", async () => {
+    await writeFile(
+      join(root, "CLAUDE.md"),
+      "# Project\nNo trailing newline",
+      "utf8"
+    );
+    await init({ root, log });
+    const md = await readFile(join(root, "CLAUDE.md"), "utf8");
+    expect(md).toContain("No trailing newline\n");
+    expect(md).toContain(MARKER);
+  });
+
+  it("reports what it did, so it is never a silent edit", async () => {
+    await writeFile(join(root, "CLAUDE.md"), "# Project\n", "utf8");
+    lines = [];
+    await init({ root, log });
+    expect(flat()).toMatch(/CLAUDE\.md/);
   });
 });
 

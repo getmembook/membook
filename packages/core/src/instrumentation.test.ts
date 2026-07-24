@@ -129,6 +129,25 @@ describe("recorded events", () => {
     );
   });
 
+  // `query_terms: 3` cannot answer the question this log exists for —
+  // whether a memory would have helped.
+  it("records the query as asked", async () => {
+    const membook = new Membook(root, { instrumentation: true });
+    await membook.recall("how does the dispense queue pin code work", {
+      now: NOW,
+    });
+    const event = (await events(membook)).find((e) => e["event"] === "recall")!;
+    expect(event["query"]).toBe("how does the dispense queue pin code work");
+  });
+
+  it("redacts a query that trips the scanner", async () => {
+    const membook = new Membook(root, { instrumentation: true });
+    await membook.recall(`is ${F.awsKey} the right key`, { now: NOW });
+    const raw = await readFile(membook.paths.telemetry, "utf8");
+    expect(raw).toContain("[redacted]");
+    expect(raw).not.toContain(F.awsKey);
+  });
+
   it("logs book compilation counts", async () => {
     const membook = new Membook(root, { instrumentation: true });
     await membook.remember(memoryFor("A fact."), "A fact.");

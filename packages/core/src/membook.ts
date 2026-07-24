@@ -16,6 +16,7 @@ import { search, type SearchHit, type SearchOptions } from "./search.js";
 import { verifyPass, type VerifyOptions, type VerifyReport } from "./verify.js";
 import { recall, type RecallOptions, type RecallResult } from "./recall.js";
 import { compileBook, writeBook, type BookReport } from "./book.js";
+import { scanForSecrets } from "./secret-scan.js";
 import { WriteBlockedError, type QuarantineRecord } from "./errors.js";
 import {
   FileInstrumentation,
@@ -164,6 +165,9 @@ export class Membook {
       const result = recall(db, query, options);
       this.instrumentation.record({
         event: "recall",
+        // Redacted rather than dropped: the shape of the log stays constant,
+        // and a secret typed into a query is never written down.
+        query: scanForSecrets(query).length > 0 ? "[redacted]" : query,
         query_terms: query.trim().split(/\s+/).filter(Boolean).length,
         served: result.hits.length,
         withheld_below_floor: result.withheld.belowFloor,

@@ -18,6 +18,19 @@ import type { MemoryStatus, MemoryType } from "@membook/spec";
 
 export interface RecallEvent {
   event: "recall";
+  /**
+   * The query as asked.
+   *
+   * Recorded because `query_terms: 3` cannot answer the question this file
+   * exists for — whether a memory *would* have helped. This log is local,
+   * gitignored, and never leaves the machine, so recording the text is the
+   * honest trade for a number that means something.
+   *
+   * Redacted to `[redacted]` when the query trips the secret scanner: people
+   * type credentials into search boxes, and the "never records the secret
+   * itself" invariant applies to what is asked as well as what is stored.
+   */
+  query: string;
   query_terms: number;
   served: number;
   withheld_below_floor: number;

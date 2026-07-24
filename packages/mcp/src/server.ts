@@ -160,7 +160,13 @@ export function createServer(options: CreateServerOptions): McpServer {
     {
       title: "Remember a memory",
       description:
+        // WHEN, not just what. Measured in a real repo: `recall` fired and
+        // `remember` never did, because recall has a natural pull — "I need
+        // to know something" — and nothing in a session prompts "you just
+        // learned something, write it down". The what-not-to-record guidance
+        // is right for precision, but with no trigger it resolves to never.
         "Record durable, project-specific knowledge worth carrying into a future session: a decision and its reason, a non-obvious gotcha, a convention, a map of where something lives, or a dead end not worth retrying. " +
+        "CALL THIS as soon as you work out something that was not obvious — a surprising constraint, why an approach failed, where behaviour actually lives — and before you finish a task. If you spent effort discovering it, the next session should not have to. " +
         "Do NOT record what the code already says, what is obvious from reading it, or anything specific to the current task. " +
         "Every memory MUST name the files it is about — an unanchored memory cannot be verified and will be rejected.",
       inputSchema: {
@@ -295,7 +301,7 @@ export function createServer(options: CreateServerOptions): McpServer {
       title: "Session digest",
       description:
         "Report the state of this repository's memory: how many memories exist, how many are verified, stale, or invalidated, and which need attention. " +
-        "Useful at the start of a session to know what is trustworthy, and at the end to see what changed.",
+        "CALL THIS at the start of a session to learn what is already known and how far to trust it, and again at the end to check whether what you learned has been recorded.",
       inputSchema: {
         verify: z
           .boolean()
