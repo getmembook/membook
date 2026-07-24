@@ -10,8 +10,8 @@ Every memory is anchored to specific files. Anything whose anchored code has
 changed since it was last checked is withheld from this file rather than
 asserted.
 
-It carries all 11 eligible memories. 1 further memory is withheld because the
-code it describes has changed since it was last checked. This file is
+It carries all 8 eligible memories. 4 further memories are withheld because
+the code they describe has changed since they were last checked. This file is
 generated, never edited by hand — corrections belong in `.membook/memories/`.
 
 Entries marked `(unverified)` have not been checked against current code yet.
@@ -22,12 +22,6 @@ Treat them as informed leads rather than established fact.
 `npm view` 404s for minutes after a first publish while the package exists fine; use `npm owner ls <pkg>` to confirm, since it reads a different path. Also `--tag alpha` does not stop npm setting `latest` — a package's first publish always takes `latest` whatever tag you pass.
 
 `docs/releasing.md`
-
-### gotcha
-
-Do not tune retrieval on BM25 alone: on a small corpus its IDF is degenerate, so a memory matching one rare term of a multi-term query outranks one that actually answers it. Term coverage scales relevance to fix this. The small-corpus regime is the normal case, not an edge case — every repository's book starts tiny, so precision-at-small-N is where this has to work.
-
-`packages/core/src/recall.ts#termCoverage`
 
 ### gotcha
 
@@ -67,19 +61,6 @@ Every workspace package resolves its siblings to SOURCE, not to built dist: a vi
 
 ### decision
 
-Anchor `kind` is always serialized explicitly, and leads every anchor map.
-
-Zod discriminates before defaults apply, so an omitted discriminator is a hard
-reject rather than a fallback to `git` — and papering over that with a preprocess
-step would cost more than the one line it saves. Emitting `kind` makes v0.2's
-lockfile-hash and API-contract anchors purely additive: any reader written against
-v1 files already handles the discriminator. Leading with it makes anchor diffs
-scannable in PR review.
-
-`packages/spec/src/schema.ts#gitAnchorSchema`, `packages/spec/src/serialize.ts#ANCHOR_KEY_ORDER`
-
-### decision
-
 The wire schema is the Memfile standard; Date tolerance is a one-directional
 reader courtesy of this implementation.
 
@@ -91,17 +72,3 @@ reach disk, and a tool emitting real YAML timestamps is not spec-compliant howev
 forgiving our reader is.
 
 `packages/spec/src/schema.ts#memoryWireSchema`, `packages/spec/src/json-schema.ts#memoryJsonSchema`
-
-### decision
-
-Timestamps serialize double-quoted, in canonical UTC second precision, by explicit
-serializer rule.
-
-js-yaml (via gray-matter) applies the YAML 1.1 schema, which silently coerces an
-unquoted ISO timestamp into a Date — an invisible mutation that breaks byte-exact
-round-trips and pollutes diffs. The rule is stated explicitly rather than left to
-the emitter's quoting heuristics, because those heuristics are what let the
-coercion through. Offsets are normalized, not rejected, so a memory written in
-Kochi and re-verified in London never produces a timezone-representation diff.
-
-`packages/spec/src/schema.ts#CANONICAL_TIMESTAMP_RE`, `packages/spec/src/serialize.ts#TIMESTAMP_KEYS`

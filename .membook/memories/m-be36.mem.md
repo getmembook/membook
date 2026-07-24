@@ -2,7 +2,7 @@
 memfile: 1
 id: m-be36
 type: decision
-status: verified
+status: stale
 scope: repo
 confidence: 1
 created: "2026-07-24T00:54:10Z"
@@ -11,11 +11,11 @@ anchors:
   - kind: git
     path: packages/spec/src/schema.ts
     symbol: gitAnchorSchema
-    commit: b5a07e02ee30f46ab27239d30ffcf13e2237fc36
+    commit: d57ca04d919939982aaa76af11d839a66a35f8a5
   - kind: git
     path: packages/spec/src/serialize.ts
     symbol: ANCHOR_KEY_ORDER
-    commit: b5a07e02ee30f46ab27239d30ffcf13e2237fc36
+    commit: d57ca04d919939982aaa76af11d839a66a35f8a5
 provenance:
   origin: authored
   author: agent

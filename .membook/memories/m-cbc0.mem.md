@@ -9,10 +9,10 @@ created: "2026-07-24T14:22:31Z"
 anchors:
   - kind: git
     path: packages/cli/package.json
-    commit: ba39c02315b4848cd381044a39b11321d1949c97
+    commit: c445ac3e8b1dbbf1f3c29045945153919c844dfa
   - kind: git
     path: docs/releasing.md
-    commit: ba39c02315b4848cd381044a39b11321d1949c97
+    commit: c445ac3e8b1dbbf1f3c29045945153919c844dfa
 provenance:
   origin: authored
   author: agent
