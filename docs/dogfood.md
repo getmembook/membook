@@ -22,6 +22,27 @@ gitignored. Paste the relevant lines into an entry rather than committing it.
 
 ## Entries
 
+### 2026-07-24 — the clock starts
+
+Registered the MCP server at user scope, pointing at the local build:
+
+```
+claude mcp add membook --scope user \
+  -e MEMBOOK_AGENT=claude-code -e MEMBOOK_MODEL=claude-opus-4-8 \
+  -- node <repo>/packages/mcp/dist/cli.js
+```
+
+Publishing is not a prerequisite for any of this. Four of the five gate
+criteria — signature demo, hit rate, staleness catch, zero secrets — take
+their evidence from ordinary use, and only cold `npx membook init` on a clean
+machine actually needs the npm release.
+
+Verified against an unrelated throwaway repo rather than this one: `remember`
+anchored to `src/api.ts` at HEAD, `recall` returned it. First run as a general
+tool rather than on its own source.
+
+**Two weeks from today.**
+
 ### 2026-07-24 — the tool caught its own drift
 
 **What happened.** Ordinary work: edited `packages/spec/src/schema.ts` to
