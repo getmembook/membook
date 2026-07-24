@@ -1,0 +1,42 @@
+{
+  "name": "@membook/core",
+  "version": "0.1.0",
+  "description": "Membook engine — store, index, retrieve. Files are the truth; the database is a cache.",
+  "license": "MIT",
+  "author": "Stag.ai Ltd",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/getmembook/membook",
+    "directory": "packages/core"
+  },
+  "dependencies": {
+    "@membook/spec": "workspace:*",
+    "better-sqlite3": "^11.10.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.19.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
