@@ -105,10 +105,11 @@ Changes to published packages need a [changeset](https://github.com/changesets/c
 pnpm changeset
 ```
 
-Publishing itself is documented in [docs/releasing.md](./docs/releasing.md).
-Read it before releasing anything — there is no release workflow yet, and the
-process has several traps that produce misleading errors, including one that
-ships a package whose binary silently never links.
+Publishing runs from CI: merged changesets open a version PR, and merging that
+publishes with provenance — see [docs/releasing.md](./docs/releasing.md). Do
+not publish from a laptop; the manual process it replaced had several traps
+that produce misleading errors, including one that ships a package whose
+binary silently never links, and the runbook records them as history.
 
 ## Code style
 
