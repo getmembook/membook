@@ -10,7 +10,7 @@ Every memory is anchored to specific files. Anything whose anchored code has
 changed since it was last checked is withheld from this file rather than
 asserted.
 
-It carries all 2 eligible memories. 3 further memories are withheld because
+It carries all 4 eligible memories. 3 further memories are withheld because
 the code they describe has changed since they were last checked. This file is
 generated, never edited by hand — corrections belong in `.membook/memories/`.
 
@@ -23,8 +23,20 @@ Do not tune retrieval on BM25 alone: on a small corpus its IDF is degenerate, so
 
 `packages/core/src/recall.ts#termCoverage`
 
-### convention (unverified)
+### gotcha
+
+Never add a gitleaks allowlist or --no-verify for scanner test fixtures; assemble credential-shaped strings at runtime from fragments instead. This repo is upstream of a standard, so every mechanism in its history is a worked example someone copies, and an allowlist entry is a published tutorial in annotating past a scanner. Expect two rounds: leak detection is context-sensitive, so a fragment that matches no rule alone can still trip the generic-api-key rule purely by sitting next to a property named like a key.
+
+`packages/core/src/fake-secrets.ts#FAKE_SECRETS`
+
+### convention
 
 Every workspace package resolves its siblings to SOURCE, not to built dist: a vitest alias for tests and tsconfig `paths` for typecheck, with `rootDir` removed so paths may point outside the package. Without this a fresh clone cannot run `pnpm test` or `pnpm typecheck` until something has been built, and CI passes only by the luck of running build first. Package `exports` still point at dist, because source-pointing exports would break every consumer.
 
 `packages/core/vitest.config.ts`, `packages/mcp/tsconfig.json`, `packages/core/tsconfig.json`
+
+### convention
+
+Every injectable boundary needs at least one test through the real thing. Injecting a dependency to make a unit test easy also makes the suite structurally unable to exercise the path that ships, and the resulting failure is silent success rather than an error. Proven twice here: the in-memory MCP transport hid nothing only because a stdio test spawned the real binary, and an injected `ask` hid a readline that drained piped stdin during setup and discarded the human's answer while reporting success.
+
+`packages/cli/src/commands/review.ts`, `packages/cli/src/cli.test.ts`, `packages/mcp/src/server.test.ts`

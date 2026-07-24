@@ -97,6 +97,16 @@ wrote a memory, from what, and in what context, purely from which fields exist.
 
 Nothing is published to npm yet.
 
+## Platform support
+
+**macOS and Linux for v0.1.** Windows is built in CI but not gated on, and it
+currently does not work: `better-sqlite3` has no prebuilt binary for recent
+Node on Windows and fails to compile on a clean machine, so `membook init`
+will not get off the ground there.
+
+Stated plainly because a known limitation beats an implied capability that
+fails at the first command. Windows support is a v0.2 question.
+
 ## Development
 
 Requires Node ≥ 20 (the repo pins 24 via [mise](https://mise.jdx.dev) and
