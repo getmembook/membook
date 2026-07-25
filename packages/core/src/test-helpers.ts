@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { computeMemoryId, type MemoryInput } from "@membook/spec";
 import { Membook } from "./membook.js";
 
-export const COMMIT = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
+const COMMIT = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
 
 export async function tempRepo(): Promise<{
   root: string;

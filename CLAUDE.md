@@ -40,7 +40,7 @@ membook/
 │   ├── core/                  # @membook/core — engine: store, index, distill, anchor, verify, retrieve. Zero I/O opinions, fully unit-testable
 │   ├── mcp/                   # @membook/mcp — thin stdio MCP server wrapping core (tools: remember, recall, session_digest)
 │   └── cli/                   # membook — CLI binary wrapping core (init, status, review, verify, reindex)
-├── fixtures/                  # fixture git repos for the invalidation test harness
+├── scripts/                   # measurement harnesses: backtest, calibrate, query-replay
 └── .membook/                  # dogfood: this repo's own memories, once functional
 ```
 

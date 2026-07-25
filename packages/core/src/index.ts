@@ -49,6 +49,8 @@ export {
   type RememberEvent,
   type VerifyEvent,
   type RecheckEvent,
+  type ReviewEvent,
+  type DistillEvent,
   type WriteBlockedEvent,
   type BookEvent,
 } from "./instrumentation.js";
