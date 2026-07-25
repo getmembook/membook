@@ -10,18 +10,29 @@ Every memory is anchored to specific files. Anything whose anchored code has
 changed since it was last checked is withheld from this file rather than
 asserted.
 
-It carries all 8 eligible memories. 4 further memories are withheld because
-the code they describe has changed since they were last checked. This file is
-generated, never edited by hand — corrections belong in `.membook/memories/`.
+It carries all 11 eligible memories. This file is generated, never edited by
+hand — corrections belong in `.membook/memories/`.
 
 Entries marked `(unverified)` have not been checked against current code yet.
 Treat them as informed leads rather than established fact.
 
-### gotcha (unverified)
+### gotcha
 
 `npm view` 404s for minutes after a first publish while the package exists fine; use `npm owner ls <pkg>` to confirm, since it reads a different path. Also `--tag alpha` does not stop npm setting `latest` — a package's first publish always takes `latest` whatever tag you pass.
 
 `docs/releasing.md`
+
+### gotcha
+
+Do not tune retrieval on BM25 alone: on a small corpus its IDF is degenerate, so a memory matching one rare term of a multi-term query outranks one that actually answers it. Term coverage scales relevance to fix this. The small-corpus regime is the normal case, not an edge case — every repository's book starts tiny, so precision-at-small-N is where this has to work.
+
+`packages/core/src/recall.ts#termCoverage`
+
+### gotcha
+
+Publish with pnpm, never npm. npm leaves pnpm's `workspace:*` protocol unresolved in the packed tarball, so the install fails and node_modules/.bin/membook is never created — the symptom is `npx membook` doing nothing, not any error mentioning workspaces. The only check that catches it is installing the tarball and confirming the binary linked; npm's warning about `bin` is misleading and fires even when bin is fine.
+
+`packages/cli/package.json`, `docs/releasing.md`
 
 ### gotcha
 
@@ -35,29 +46,36 @@ Never add a gitleaks allowlist or --no-verify for scanner test fixtures; assembl
 
 `packages/spec/src/schema.ts#MEMFILE_SPEC_VERSION`, `docs/design/v0.2-workspaces.md`
 
-### gotcha (unverified)
-
-An npm granular token needs BOTH `All packages` scope and `bypass 2FA` to publish this repo. Owning the membook org reserves the @membook scope but not the unscoped `membook` name — they are separate namespaces, so an org-scoped token publishes the scoped packages and fails on the CLI with `You may not perform that action with these credentials`, which reads like a permissions bug rather than a scope gap.
-
-`docs/releasing.md`
-
 ### decision
 
 `scope` becomes a discriminated union in v0.2: user-scope memories forbid anchors entirely, and the verification vocabulary (`status`, `verified`) is absent from their shape rather than perpetually unverified. An anchor is what makes a memory a checkable claim about the world; a user preference is testimony about the human, so verification is a category error against it, not a pending obligation. If you have a file to point at, it is repo knowledge wearing the wrong scope.
 
 `packages/spec/src/schema.ts#memorySchema`, `docs/design/v0.2-workspaces.md`
 
-### gotcha (unverified)
-
-Publish with pnpm, never npm. npm leaves pnpm's `workspace:*` protocol unresolved in the packed tarball, so the install fails and node_modules/.bin/membook is never created — the symptom is `npx membook` doing nothing, not any error mentioning workspaces. The only check that catches it is installing the tarball and confirming the binary linked; npm's warning about `bin` is misleading and fires even when bin is fine.
-
-`packages/cli/package.json`, `docs/releasing.md`
-
 ### convention
 
 Every workspace package resolves its siblings to SOURCE, not to built dist: a vitest alias for tests and tsconfig `paths` for typecheck, with `rootDir` removed so paths may point outside the package. Without this a fresh clone cannot run `pnpm test` or `pnpm typecheck` until something has been built, and CI passes only by the luck of running build first. Package `exports` still point at dist, because source-pointing exports would break every consumer.
 
 `packages/core/vitest.config.ts`, `packages/mcp/tsconfig.json`, `packages/core/tsconfig.json`
+
+### decision
+
+Anchor `kind` is always serialized explicitly, and leads every anchor map.
+
+Zod discriminates before defaults apply, so an omitted discriminator is a hard
+reject rather than a fallback to `git` — and papering over that with a preprocess
+step would cost more than the one line it saves. Emitting `kind` makes v0.2's
+lockfile-hash and API-contract anchors purely additive: any reader written against
+v1 files already handles the discriminator. Leading with it makes anchor diffs
+scannable in PR review.
+
+`packages/spec/src/schema.ts#gitAnchorSchema`, `packages/spec/src/serialize.ts#ANCHOR_KEY_ORDER`
+
+### convention
+
+Every injectable boundary needs at least one test through the real thing. Injecting a dependency to make a unit test easy also makes the suite structurally unable to exercise the path that ships, and the resulting failure is silent success rather than an error. Proven twice here: the in-memory MCP transport hid nothing only because a stdio test spawned the real binary, and an injected `ask` hid a readline that drained piped stdin during setup and discarded the human's answer while reporting success.
+
+`packages/cli/src/commands/review.ts`, `packages/cli/src/cli.test.ts`, `packages/mcp/src/server.test.ts`
 
 ### decision
 
@@ -72,3 +90,17 @@ reach disk, and a tool emitting real YAML timestamps is not spec-compliant howev
 forgiving our reader is.
 
 `packages/spec/src/schema.ts#memoryWireSchema`, `packages/spec/src/json-schema.ts#memoryJsonSchema`
+
+### decision
+
+Timestamps serialize double-quoted, in canonical UTC second precision, by explicit
+serializer rule.
+
+js-yaml (via gray-matter) applies the YAML 1.1 schema, which silently coerces an
+unquoted ISO timestamp into a Date — an invisible mutation that breaks byte-exact
+round-trips and pollutes diffs. The rule is stated explicitly rather than left to
+the emitter's quoting heuristics, because those heuristics are what let the
+coercion through. Offsets are normalized, not rejected, so a memory written in
+Kochi and re-verified in London never produces a timezone-representation diff.
+
+`packages/spec/src/schema.ts#CANONICAL_TIMESTAMP_RE`, `packages/spec/src/serialize.ts#TIMESTAMP_KEYS`
