@@ -1471,3 +1471,79 @@ describe("recall hook ignores vague prompts", () => {
     expect(flat()).toContain("gitleaks");
   });
 });
+
+/**
+ * Both found by a human running the first real ratification pass — ten
+ * minutes of actual use surfaced what no test had.
+ */
+describe("review renders and listens like it means it", () => {
+  async function seedWrapped(): Promise<void> {
+    await init({ root, log });
+    // A body hard-wrapped at a narrow width, as real memories are.
+    await remember({
+      root,
+      statement:
+        "Timestamps serialize double-quoted, in canonical UTC second precision, by explicit\nserializer rule.\n\njs-yaml applies the YAML 1.1\nschema, which silently coerces an\nunquoted ISO timestamp into a Date.",
+      type: "decision",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    lines = [];
+  }
+
+  it("re-flows pre-wrapped bodies so every line keeps its indent", async () => {
+    await seedWrapped();
+    await review({ root, log, ask: async () => "s" });
+
+    const body = lines.filter(
+      (l) => l.includes("serializer") || l.includes("YAML")
+    );
+    expect(body.length).toBeGreaterThan(0);
+    // The bug: continuation lines after an embedded newline lost the indent.
+    for (const line of lines) {
+      if (line.includes("serializer rule") || line.includes("coerces")) {
+        expect(line.startsWith("  ")).toBe(true);
+      }
+    }
+    // And the embedded newlines are gone from any single output line's middle.
+    expect(lines.some((l) => /\S\n\S/.test(l))).toBe(false);
+  });
+
+  it("re-asks on input it does not understand, instead of silently skipping", async () => {
+    await init({ root, log });
+    await remember({
+      root,
+      statement: "A memory the human wants deleted.",
+      type: "gotcha",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    lines = [];
+
+    // The measured case: `dd` meant delete. Old behaviour: "Skipped." —
+    // intent silently dropped while the tool appeared to obey.
+    const answers = ["dd", "d"];
+    await review({ root, log, ask: async () => answers.shift() ?? "q" });
+
+    expect(flat()).toContain('Did not understand "dd"');
+    expect(await new Membook(root).store.listIds()).toHaveLength(0);
+    const events = (await readEvents(root)).filter((e) => e.event === "review");
+    expect(events[0]!.action).toBe("delete");
+  });
+
+  it("still quits when piped input runs out", async () => {
+    await init({ root, log });
+    await remember({
+      root,
+      statement: "A memory that must survive an EOF.",
+      type: "gotcha",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    lines = [];
+
+    // `ask` maps EOF to "q"; the re-ask loop must not turn that into a spin.
+    await review({ root, log, ask: async () => "q" });
+    expect(await new Membook(root).store.listIds()).toHaveLength(1);
+  });
+});
