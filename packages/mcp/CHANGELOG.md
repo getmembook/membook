@@ -1,5 +1,13 @@
 # @membook/mcp
 
+## 0.1.2
+
+### Patch Changes
+
+- [#22](https://github.com/getmembook/membook/pull/22) [`c12907d`](https://github.com/getmembook/membook/commit/c12907ddcb7c6ed96164e93ba8d9038dd6febd9b) Thanks [@hiranofficial](https://github.com/hiranofficial)! - `SERVER_VERSION` reads package.json at runtime instead of a hardcoded string,
+  so the version the MCP server reports to clients tracks the release. Same
+  drift class as the CLI's `--version` bug; same guard test.
+
 ## 0.1.1
 
 ### Patch Changes
