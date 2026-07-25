@@ -9,7 +9,7 @@ import type { MemoryStatus } from "@membook/spec";
  * longer trust" must read as different sentences, not different integers.
  */
 
-export const STATUS_COLOUR: Record<MemoryStatus, (s: string) => string> = {
+const STATUS_COLOUR: Record<MemoryStatus, (s: string) => string> = {
   verified: pc.green,
   unverified: pc.yellow,
   stale: pc.magenta,

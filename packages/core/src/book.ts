@@ -299,4 +299,3 @@ export async function writeBook(
   return report;
 }
 
-export type { StoredMemory };

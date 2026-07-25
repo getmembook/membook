@@ -46,7 +46,7 @@ const MIN_QUERY_CHARS = 12;
  * a few marginal true positives — "CI failed" no longer injects — and silence
  * is the right way to be wrong on a surface that fires on every prompt.
  */
-export const MIN_QUERY_TERMS = 3;
+const MIN_QUERY_TERMS = 3;
 
 export interface HookOptions {
   root: string;

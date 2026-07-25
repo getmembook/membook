@@ -332,4 +332,3 @@ export function seedFrontmatter(
   };
 }
 
-export { sourceHash };
