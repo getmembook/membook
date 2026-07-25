@@ -3,7 +3,10 @@
 **Memory that stays true.** A verifiable memory engine for coding agents.
 
 [![CI](https://github.com/getmembook/membook/actions/workflows/ci.yml/badge.svg)](https://github.com/getmembook/membook/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/membook/alpha?label=npm%40alpha)](https://www.npmjs.com/package/membook)
+[![membook](https://img.shields.io/npm/v/membook?label=membook)](https://www.npmjs.com/package/membook)
+[![@membook/core](https://img.shields.io/npm/v/%40membook%2Fcore?label=%40membook%2Fcore)](https://www.npmjs.com/package/@membook/core)
+[![@membook/mcp](https://img.shields.io/npm/v/%40membook%2Fmcp?label=%40membook%2Fmcp)](https://www.npmjs.com/package/@membook/mcp)
+[![@membook/spec](https://img.shields.io/npm/v/%40membook%2Fspec?label=%40membook%2Fspec)](https://www.npmjs.com/package/@membook/spec)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](./package.json)
 
@@ -15,11 +18,13 @@ symbol — so when the code changes, the memory knows. Storage is plain markdown
 committed to your repo: it renders on GitHub, diffs in pull requests, and
 survives review like any other artifact.
 
-> **Pre-release.** Everything below is built and tested, but the release gate
-> has not been met: Membook has not yet been lived with on a real project for
-> long enough to know whether it helps. The npm badge above is the current
-> answer to "can I install this" — no `latest` tag means no release yet.
-> Expect breaking changes.
+> **Early.** The five release gates in the
+> [dogfood log](./docs/dogfood.md) all closed on measured evidence — cold
+> install, an unrehearsed staleness catch, a live recall hit, zero secrets
+> written — and `0.1.x` is on npm with provenance. What has NOT happened yet
+> is time: nobody has lived with Membook for weeks, so whether it durably
+> helps is still being measured rather than claimed. Pre-1.0, expect breaking
+> changes; the Memfile format itself is versioned and read-tolerant.
 
 ## Why it's different
 
