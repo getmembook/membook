@@ -351,6 +351,11 @@ for (const cp of checkpoints) {
   const report = await membook.verify();
 
   for (const v of report.changed) {
+    // The target repo may carry its own real memories — membook itself does.
+    // The measurement is about the anchors this harness planted; a verdict on
+    // a pre-existing memory is someone else's story and crashes the
+    // bookkeeping (found when the first target with a live store was scanned).
+    if (!seeded.some((s) => s.id === v.id)) continue;
     if (v.from === "verified" && v.to !== "verified" && !firstDrift.has(v.id)) {
       firstDrift.set(v.id, {
         at: cp.at,

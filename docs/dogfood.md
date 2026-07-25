@@ -537,3 +537,44 @@ destroying is itself now a measurable number.
 fixture tests passed throughout, the calibration harness had even blessed
 model-invalidates as acceptable. The policy was wrong, not the code, and only
 live data could say so.
+
+### 2026-07-25 — the half-life is a property of the repo, not of software
+
+**What happened.** Extended the backtest beyond the first three repos: five
+more local repos plus one external OSS library (`execa`, 563 commits walked
+across 6.7 years). Also fixed a harness crash the extension exposed — membook
+was the first target that already carries its own memories, and the verify
+pass returned verdicts on ids the harness never planted.
+
+**The numbers.**
+
+| repo | commits walked | window | median drift | half-life |
+| --- | --- | --- | --- | --- |
+| backend-repo | 175 | 35d | 14.7d | 21.9d |
+| frontend-repo | 115 | 35d | 13.8d | 35.8d |
+| device-repo | 39 | 35d | 15.2d | 15.3d |
+| execa (mature OSS) | 563 | 2447d | **419.6d** | **419.6d** |
+| membook (2 days old) | 34 | <1d | — | degenerate |
+| two sparse websites | 13–14 | 36–90d | — | degenerate |
+| two docs-only repos | — | — | — | n/a (no code) |
+
+**The finding.** The 13.8–15.2-day cluster was real but LOCAL: three repos in
+the same regime — early-stage, high-activity product code. Outside that
+regime the number moves by an order of magnitude in both directions: a mature
+library holds anchors for ~14 months; a two-day-old repo or a sparse website
+gives degenerate answers because the metric needs commit density to mean
+anything.
+
+So the honest claim is not "memory half-life is two weeks." It is: **half-life
+is a measurable property of each repository's activity regime**, ranging from
+weeks on active product code to over a year on settled libraries. That is a
+better product story than the constant would have been — a fixed re-check
+cadence would be wrong almost everywhere, and Membook's session-time
+verification adapts to the repo's own tempo for free. The backtest is the
+instrument that tells a team where their repo sits.
+
+**Harness lesson.** A target with a live memory store crashed the
+bookkeeping — verdicts arrived for memories the harness never seeded. Fixed
+by scoping drift accounting to planted ids. Every new class of target has
+found a new assumption; this one found the assumption that the harness owns
+the store.
