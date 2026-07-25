@@ -1,5 +1,30 @@
 # @membook/core
 
+## 0.1.1
+
+### Patch Changes
+
+- [#20](https://github.com/getmembook/membook/pull/20) [`e41e553`](https://github.com/getmembook/membook/commit/e41e5535539e39ef5affb69042c8d4e625a8c3a4) Thanks [@hiranofficial](https://github.com/hiranofficial)! - A model may fail to restore, but it may not destroy. LLM re-check `invalidate`
+  verdicts now land as `stale` — withheld from the book, flagged for review,
+  recoverable — instead of invalidating the memory outright. `invalidated`
+  remains reachable only through deterministic evidence (the anchored file is
+  gone) or a human decision in `review`. Measured on live data: a small model
+  invalidated a still-true memory because a version number changed in its
+  anchored file; `restore` requires string-matched evidence precisely to stop
+  rubber-stamping, and this closes the same hole in the destructive direction.
+
+- [#20](https://github.com/getmembook/membook/pull/20) [`e41e553`](https://github.com/getmembook/membook/commit/e41e5535539e39ef5affb69042c8d4e625a8c3a4) Thanks [@hiranofficial](https://github.com/hiranofficial)! - New `rememberMany` on `Membook`: batch writes open the index once instead of
+  per memory. Seeding and other bulk paths are dramatically faster on platforms
+  where database open/close is expensive (Windows most of all). Additive API;
+  shipped as a patch because this project reserves 0.2 for the workspace
+  roadmap and the pre-1.0 minor lane signals breakage.
+
+- [#20](https://github.com/getmembook/membook/pull/20) [`e41e553`](https://github.com/getmembook/membook/commit/e41e5535539e39ef5affb69042c8d4e625a8c3a4) Thanks [@hiranofficial](https://github.com/hiranofficial)! - `openIndex` closes the database handle on every throw path. The
+  metadata-mismatch throws leaked it, which was invisible on POSIX but made the
+  index undeletable on Windows — so `membook reindex`, whose remedy for drift is
+  deleting the file, failed with EBUSY. The error path no longer blocks its own
+  cure.
+
 ## 0.1.0
 
 ### Minor Changes

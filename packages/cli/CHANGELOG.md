@@ -1,5 +1,17 @@
 # membook
 
+## 0.1.1
+
+### Patch Changes
+
+- [#20](https://github.com/getmembook/membook/pull/20) [`e41e553`](https://github.com/getmembook/membook/commit/e41e5535539e39ef5affb69042c8d4e625a8c3a4) Thanks [@hiranofficial](https://github.com/hiranofficial)! - `membook review` re-flows hard-wrapped memory bodies before display, and
+  re-asks on input it does not recognize instead of silently skipping — typed
+  `dd` meaning delete, the old behaviour printed "Skipped." and moved on, which
+  on a prompt with a destructive option is the worst way to be wrong. EOF still
+  quits, so piped input cannot loop.
+- Updated dependencies [[`e41e553`](https://github.com/getmembook/membook/commit/e41e5535539e39ef5affb69042c8d4e625a8c3a4), [`e41e553`](https://github.com/getmembook/membook/commit/e41e5535539e39ef5affb69042c8d4e625a8c3a4), [`e41e553`](https://github.com/getmembook/membook/commit/e41e5535539e39ef5affb69042c8d4e625a8c3a4)]:
+  - @membook/core@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes
