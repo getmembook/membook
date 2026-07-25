@@ -578,3 +578,28 @@ bookkeeping — verdicts arrived for memories the harness never seeded. Fixed
 by scoping drift accounting to planted ids. Every new class of target has
 found a new assumption; this one found the assumption that the harness owns
 the store.
+
+### 2026-07-25 — the first real ratification pass, and what ten minutes found
+
+**What happened.** A human ran `membook review` over all seven pending
+memories — six ratified, one deleted (`m-d834`: true, but guidance about the
+token-publishing road this repo closed for OIDC). The store reached 11/11
+verified and the book carries everything, 1,917 tokens, nothing withheld, for
+the first time. Seven ground-truth labels landed in telemetry.
+
+**What annoyed the human — two real bugs, ten minutes of use.**
+
+Pre-wrapped memory bodies rendered broken: `wrap()` splits on spaces, so the
+hard newlines memories arrive with survived into the terminal mid-sentence,
+continuation lines flush-left. Paragraphs are now re-flowed before wrapping.
+
+Worse: the human typed `dd` meaning delete, and review printed "Skipped." and
+moved on. Anything unrecognized was treated as skip — on a prompt with a
+destructive option, silently misreading intent while appearing to obey is the
+worst available behaviour. It now says what it did not understand and asks
+again; EOF still quits, so piped input cannot spin.
+
+**The pattern, again.** Neither bug was reachable by the existing tests, both
+were obvious within minutes of genuine use, and one of them sat directly on
+the surface that produces the product's only ground-truth labels. The
+annoyance log keeps earning its place as the real backlog.

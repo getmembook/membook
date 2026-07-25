@@ -55,10 +55,23 @@ function describe(memory: StoredMemory): string[] {
       ? "written by a human"
       : `written by ${fm.provenance.agent}`;
 
+  // Re-flow before wrapping. Memory bodies arrive hard-wrapped at whatever
+  // width their author's editor used, and wrap() splits on spaces only — so
+  // those embedded newlines survived into the terminal mid-sentence, with the
+  // continuation lines losing their indent. Found by a human squinting at the
+  // first real ratification pass, not by any test: paragraphs are the unit of
+  // meaning, so collapse whitespace within each and wrap them separately.
+  const paragraphs = memory.memfile.body
+    .split(/\n[ \t]*\n/)
+    .map((p) => p.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .map((p) => wrap(p, 76, "  "))
+    .join("\n\n");
+
   return [
     `${statusLabel(fm.status)}  ${dim(STATUS_MEANING[fm.status])}`,
     "",
-    wrap(memory.memfile.body, 76, "  "),
+    paragraphs,
     "",
     dim(`  ${anchors}`),
     dim(`  ${fm.type}, ${author}, recorded ${fm.created.slice(0, 10)}`),
@@ -146,9 +159,24 @@ export async function review(options: ReviewOptions): Promise<void> {
       for (const line of describe(memory)) log(line);
       log("");
 
-      const answer = await ask(
+      // Re-ask until the answer is one this prompt actually offers. The old
+      // behaviour treated anything unrecognized as skip — measured on the
+      // first real pass, a human typed `dd` meaning delete and the tool
+      // printed "Skipped." and moved on. On a prompt with a destructive
+      // option, silently misreading intent while appearing to obey is the
+      // worst available behaviour; saying "I did not understand" costs one
+      // line. EOF cannot loop here: `ask` maps input running out to `q`.
+      let answer = await ask(
         "  [k]eep and ratify · [d]elete · [s]kip · [q]uit  > "
       );
+      while (
+        !["k", "keep", "d", "delete", "s", "skip", "q", "quit"].includes(answer)
+      ) {
+        log(dim(`  Did not understand "${answer}" — k, d, s or q.`));
+        answer = await ask(
+          "  [k]eep and ratify · [d]elete · [s]kip · [q]uit  > "
+        );
+      }
 
       if (answer === "q" || answer === "quit") break;
 
