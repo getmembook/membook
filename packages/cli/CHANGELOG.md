@@ -1,5 +1,14 @@
 # membook
 
+## 0.1.2
+
+### Patch Changes
+
+- [#22](https://github.com/getmembook/membook/pull/22) [`c12907d`](https://github.com/getmembook/membook/commit/c12907ddcb7c6ed96164e93ba8d9038dd6febd9b) Thanks [@hiranofficial](https://github.com/hiranofficial)! - `membook --version` reads the version from package.json at runtime instead of
+  a hardcoded string. The published 0.1.1 introduced itself as 0.1.0; changesets
+  bumps the manifest, and a constant nobody remembers is wrong by the second
+  release. A test now pins the binary's answer to the manifest.
+
 ## 0.1.1
 
 ### Patch Changes

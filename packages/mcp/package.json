@@ -1,6 +1,6 @@
 {
   "name": "@membook/mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Membook MCP server — serves verified memories to coding agents over stdio",
   "license": "MIT",
   "author": "Stag.ai Ltd",
