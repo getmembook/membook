@@ -370,3 +370,19 @@ describe("session_digest", () => {
     expect(await callText("session_digest", {})).toMatch(/1 unverified/);
   });
 });
+
+/**
+ * Same drift class as the CLI's --version bug: 0.1.1 shipped announcing
+ * itself as 0.1.0 because the version was a constant changesets cannot bump.
+ * SERVER_VERSION now reads package.json at runtime; this pins the agreement.
+ */
+describe("the server tells the truth about its version", () => {
+  it("SERVER_VERSION matches package.json", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { SERVER_VERSION } = await import("./server.js");
+    const pkg = JSON.parse(
+      await readFile(new URL("../package.json", import.meta.url), "utf8")
+    );
+    expect(SERVER_VERSION).toBe(pkg.version);
+  });
+});

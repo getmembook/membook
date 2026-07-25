@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createRequire } from "node:module";
 import { z } from "zod";
 import {
   Membook,
@@ -13,7 +14,11 @@ import {
 import { MEMORY_TYPES, computeMemoryId, type MemoryInput } from "@membook/spec";
 
 export const SERVER_NAME = "membook";
-export const SERVER_VERSION = "0.1.0";
+// Runtime read, not a constant: the hardcoded predecessor shipped 0.1.1
+// announcing itself as 0.1.0. dist/*.js -> ../package.json in the tarball.
+export const SERVER_VERSION: string = createRequire(import.meta.url)(
+  "../package.json"
+).version;
 
 /**
  * Hard cap on what one recall can put into an agent's context.

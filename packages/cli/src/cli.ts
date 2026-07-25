@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { createRequire } from "node:module";
 import { MEMORY_TYPES, type MemoryType } from "@membook/spec";
 import { init } from "./commands/init.js";
 import { status } from "./commands/status.js";
@@ -10,6 +11,15 @@ import { distill } from "./commands/distill.js";
 import { hookPrompt } from "./commands/hook.js";
 import { die } from "./output.js";
 
+/**
+ * Read the version from package.json at runtime rather than hardcoding it.
+ * The hardcoded string shipped 0.1.1 introducing itself as 0.1.0 — changesets
+ * bumps the manifest, and a constant nobody remembers is wrong by the second
+ * release, forever. dist/cli.js sits one level below package.json in the
+ * published tarball, so the path holds exactly where the code runs.
+ */
+const VERSION: string = createRequire(import.meta.url)("../package.json").version;
+
 const program = new Command();
 
 program
@@ -17,7 +27,7 @@ program
   .description(
     "Memory that stays true — durable project knowledge, anchored to code and checked against it."
   )
-  .version("0.1.0")
+  .version(VERSION)
   .option(
     "-C, --cwd <path>",
     "run as if started in this directory",

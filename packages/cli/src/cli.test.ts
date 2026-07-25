@@ -1547,3 +1547,21 @@ describe("review renders and listens like it means it", () => {
     expect(await new Membook(root).store.listIds()).toHaveLength(1);
   });
 });
+
+/**
+ * The published 0.1.1 introduced itself as 0.1.0: the version was a hardcoded
+ * string, and changesets bumps the manifest, not constants. This asserts the
+ * running binary agrees with its own package.json, so the drift class cannot
+ * return — any future hardcoding fails here on the first bump.
+ */
+describe("the binary tells the truth about its version", () => {
+  const bin = join(import.meta.dirname, "..", "dist", "cli.js");
+  const pkg = join(import.meta.dirname, "..", "package.json");
+  const runIf = existsSync(bin) ? it : it.skip;
+
+  runIf("--version matches package.json", async () => {
+    const { version } = JSON.parse(await readFile(pkg, "utf8"));
+    const { stdout } = await execa("node", [bin, "--version"]);
+    expect(stdout.trim()).toBe(version);
+  });
+});
