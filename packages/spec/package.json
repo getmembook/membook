@@ -1,6 +1,6 @@
 {
   "name": "@membook/spec",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The Memfile standard — schema, anchor grammar, validator, and deterministic serialization for Membook memories",
   "license": "MIT",
   "author": "Stag.ai Ltd",
