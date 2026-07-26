@@ -1,0 +1,13 @@
+# A workspace manifest — the resolution table for multi-repo verification.
+# Lives at ~/.membook/workspace.yaml (or anywhere, passed via --workspace).
+# Memories reference repos by member name, never by path: paths are
+# machine-specific; names travel in committed files.
+workspace: stag-main
+members:
+  payments-service:
+    path: ~/dev/payments
+    # Identity tiebreaker, optional. SSH and HTTPS forms of the same
+    # repository are the same identity.
+    remote: git@github.com:acme/payments-service.git
+  platform-gateway:
+    path: ~/dev/gateway
