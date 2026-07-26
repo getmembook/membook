@@ -1,6 +1,6 @@
 {
   "name": "@membook/core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Membook engine — store, index, retrieve. Files are the truth; the database is a cache.",
   "license": "MIT",
   "author": "Stag.ai Ltd",
