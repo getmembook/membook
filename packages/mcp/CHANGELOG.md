@@ -1,5 +1,13 @@
 # @membook/mcp
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`47f6d4e`](https://github.com/getmembook/membook/commit/47f6d4e0bdc1f5d4e2a0694cc8eafdaba360d53d)]:
+  - @membook/spec@0.2.0
+  - @membook/core@0.2.0
+
 ## 0.1.2
 
 ### Patch Changes
