@@ -23,7 +23,7 @@ const SOURCE_HASH =
 
 function validMemory(overrides: Partial<MemoryInput> = {}): MemoryInput {
   return {
-    memfile: 1,
+    memfile: 2,
     id: "m-4f2a",
     type: "gotcha",
     status: "verified",
@@ -143,7 +143,7 @@ describe("serialization determinism", () => {
         status: "verified",
         type: "gotcha",
         id: "m-4f2a",
-        memfile: 1,
+        memfile: 2,
       },
       body
     );

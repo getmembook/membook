@@ -5,6 +5,7 @@ import {
   memoryWireSchema,
   type Memory,
 } from "./schema.js";
+import { memfileV1FileSchema, memfileV1WireSchema } from "./schema-v1.js";
 
 /**
  * MEMFILE VERSION MACHINERY.
@@ -90,7 +91,8 @@ export interface VersionedMemorySchema {
  * in repositories we will never see.
  */
 export const MEMFILE_SCHEMAS: readonly VersionedMemorySchema[] = [
-  { version: 1, file: memorySchema, wire: memoryWireSchema },
+  { version: 1, file: memfileV1FileSchema, wire: memfileV1WireSchema },
+  { version: 2, file: memorySchema, wire: memoryWireSchema },
 ];
 
 export const SUPPORTED_MEMFILE_VERSIONS: readonly number[] =

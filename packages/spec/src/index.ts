@@ -6,6 +6,7 @@ export {
   memoryIdSchema,
   lineRangeSchema,
   gitAnchorSchema,
+  xgitAnchorSchema,
   anchorSchema,
   PROVENANCE_ORIGINS,
   PROVENANCE_AUTHORS,
@@ -22,6 +23,7 @@ export {
   type MemoryStatus,
   type MemoryScope,
   type GitAnchor,
+  type XgitAnchor,
   type Anchor,
   type Provenance,
   type ProvenanceOrigin,
@@ -36,6 +38,8 @@ export {
 } from "./schema.js";
 
 export { MemfileValidationError } from "./errors.js";
+
+export { memfileV1FileSchema, memfileV1WireSchema } from "./schema-v1.js";
 
 export { formatAnchor, parseAnchor } from "./anchor.js";
 

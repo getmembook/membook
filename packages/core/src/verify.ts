@@ -218,6 +218,24 @@ async function verifyMemory(
   const frontmatter = memory.memfile.frontmatter;
   const from = frontmatter.status;
 
+  // Cross-repo anchors need the workspace resolver and the member's own
+  // checkout — that machinery is v0.2 step 3. Until it lands, a memory
+  // carrying one is left EXACTLY as it is and says why: verifying only its
+  // local anchors would report partial coverage as a full verdict, which is
+  // the lie-by-aggregation this pass exists to prevent.
+  if (frontmatter.anchors.some((a) => a.kind === "xgit")) {
+    return {
+      id: frontmatter.id,
+      file: memory.file,
+      from,
+      to: from,
+      outcomes: [],
+      rechecked: false,
+      reason:
+        "carries a cross-repo (xgit) anchor, which this pass cannot check yet — workspace verification lands in v0.2",
+    };
+  }
+
   const outcomes: AnchorOutcome[] = [];
   for (const anchor of frontmatter.anchors) {
     outcomes.push(await classifyAnchor(root, anchor, head, diffCache));

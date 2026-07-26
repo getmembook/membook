@@ -34,7 +34,7 @@ function inputFor(spec: SeedSpec): { frontmatter: MemoryInput; body: string } {
   return {
     body: spec.body,
     frontmatter: {
-      memfile: 1,
+      memfile: 2,
       id: computeMemoryId(spec.body),
       type: spec.type ?? "gotcha",
       status,

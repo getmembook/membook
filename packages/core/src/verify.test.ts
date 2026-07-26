@@ -26,7 +26,7 @@ async function remember(
   const id = computeMemoryId(body);
   await membook.remember(
     {
-      memfile: 1,
+      memfile: 2,
       id,
       type: "gotcha",
       status,
@@ -452,5 +452,54 @@ describe("the signature demo", () => {
     const all = await membook.recall("journal_mode WAL deadlock");
     expect(all.hits).toHaveLength(1);
     expect(all.hits[0]!.status).toBe("stale");
+  });
+});
+
+describe("cross-repo anchors, before workspace verification exists", () => {
+  // Verifying only the local anchors of a memory that also reaches into
+  // another repository would report partial coverage as a full verdict —
+  // the lie-by-aggregation the pass exists to prevent. Until step 3 lands,
+  // such memories are left exactly as they are, and say why.
+  it("leaves an xgit-anchored memory untouched, with the reason spelled out", async () => {
+    const base = await repo.commitFile("src/auth.ts", "export const a = 1;\n");
+    const body = "The gateway limits config is the contract we consume.";
+    const id = computeMemoryId(body);
+    await membook.remember(
+      {
+        memfile: 2,
+        id,
+        type: "map",
+        status: "unverified",
+        scope: "repo",
+        confidence: 0.9,
+        created: "2026-07-25T10:00:00Z",
+        anchors: [
+          { path: "src/auth.ts", commit: base },
+          {
+            kind: "xgit",
+            repo: "platform-gateway",
+            path: "config/limits.yaml",
+            commit: base,
+          },
+        ],
+        provenance: { origin: "authored", author: "human" },
+      },
+      body
+    );
+    const before = (await membook.store.read(id)).text;
+
+    // Touch the local anchor so a naive pass would have re-checked it.
+    await repo.edit("src/auth.ts", "export const a = 2;\n");
+    const report = await membook.verify();
+
+    expect(await statusOf(id)).toBe("unverified");
+    expect((await membook.store.read(id)).text).toBe(before);
+    const verdict = [...report.changed, ...report.unchanged].find(
+      (v) => v.id === id
+    )!;
+    expect(verdict.to).toBe(verdict.from);
+    expect(verdict.rechecked).toBe(false);
+    expect(verdict.reason).toMatch(/cross-repo/);
+    expect(verdict.reason).toMatch(/cannot check yet/);
   });
 });

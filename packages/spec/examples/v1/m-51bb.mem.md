@@ -1,5 +1,5 @@
 ---
-memfile: 2
+memfile: 1
 id: m-51bb
 type: decision
 status: verified

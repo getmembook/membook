@@ -43,16 +43,38 @@ A durable claim about the auth module.
  * forces it.
  */
 describe("read tolerance", () => {
-  it("parses a v1 file", () => {
+  // THE PROMISE, exercised for real now that v2 exists: a v1 file parses
+  // under the v2 package by WIDENING into the current shape. The parse
+  // output says memfile 2 — downstream consumers are single-shaped — and
+  // the version the file declared survives in `Memfile.version`.
+  it("parses a v1 file by widening it into the current shape", () => {
     const memfile = parseMemfile(v1());
-    expect(memfile.frontmatter.memfile).toBe(1);
+    expect(memfile.frontmatter.memfile).toBe(MEMFILE_SPEC_VERSION);
+    expect(memfile.version).toBe(1);
   });
 
-  // The declared version travels with the parse result, because after
-  // widening it is the only remaining trace of what the file actually said —
-  // `migrate` and `status` cannot recover it from the frontmatter shape.
-  it("reports the version the file declared", () => {
-    expect(parseMemfile(v1()).version).toBe(1);
+  // The frozen golden is the byte-exact promise: these files were written
+  // by the released v0.1 and are never regenerated. If this test breaks,
+  // an installed base breaks with it.
+  it("parses every frozen v1 golden under the v2 package", async () => {
+    const files = (await readdir(join(EXAMPLES, "v1"))).filter((f) =>
+      f.endsWith(".mem.md")
+    );
+    expect(files.length).toBeGreaterThan(0);
+    for (const f of files) {
+      const source = await readFile(join(EXAMPLES, "v1", f), "utf8");
+      const memfile = parseMemfile(source, f);
+      expect(memfile.version).toBe(1);
+      expect(memfile.frontmatter.memfile).toBe(MEMFILE_SPEC_VERSION);
+    }
+  });
+
+  // A v1 file declaring scope `user` is refused with its own message, not
+  // widened: no released v0.1 surface ever wrote one, and v2 reserves the
+  // scope for a shape (anchorless) that a v1 file cannot carry.
+  it("refuses the v1 user scope no tool ever wrote", () => {
+    const source = v1().replace("scope: repo", "scope: user");
+    expect(() => parseMemfile(source)).toThrow(/user store/);
   });
 
   it("parses every golden example", async () => {

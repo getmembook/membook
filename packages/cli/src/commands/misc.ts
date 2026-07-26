@@ -647,7 +647,7 @@ export async function remember(options: RememberOptions): Promise<void> {
   const id = await membook.store.allocateId(options.statement);
 
   const frontmatter: MemoryInput = {
-    memfile: 1,
+    memfile: MEMFILE_SPEC_VERSION,
     id,
     type: options.type,
     status: "unverified",

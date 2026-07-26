@@ -47,10 +47,12 @@ const KEY_ORDER = [
 
 /**
  * `kind` leads every anchor map so PR review can scan what kind of anchor
- * changed without reading the rest of the entry.
+ * changed without reading the rest of the entry; `repo` follows it, because
+ * for an xgit anchor "which repository" is the next thing a reviewer needs.
  */
 const ANCHOR_KEY_ORDER = [
   "kind",
+  "repo",
   "path",
   "symbol",
   "line_range",
