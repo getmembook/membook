@@ -150,9 +150,19 @@ export {
   type TouchedAnchor,
 } from "./recheck.js";
 export {
+  canonicalRemote,
+  defaultWorkspacePath,
+  resolveWorkspace,
+  resolveWorkspaceFile,
+  type MemberResolution,
+  type ResolvedWorkspace,
+  type ResolveOptions,
+} from "./workspace.js";
+export {
   isGitRepository,
   headSha,
   commitExists,
+  originUrl,
   changesSince,
   followRename,
   pathExistsAt,

@@ -59,6 +59,20 @@ export async function headSha(cwd: string): Promise<string> {
   return git(cwd, ["rev-parse", "HEAD"]);
 }
 
+/**
+ * The checkout's `origin` URL, or null when it has none.
+ *
+ * Null is a legitimate answer, not an error: a local-only repository is a
+ * valid workspace member that simply cannot have its identity confirmed.
+ */
+export async function originUrl(cwd: string): Promise<string | null> {
+  try {
+    return await git(cwd, ["remote", "get-url", "origin"]);
+  } catch {
+    return null;
+  }
+}
+
 export async function commitExists(cwd: string, sha: string): Promise<boolean> {
   try {
     const type = await git(cwd, ["cat-file", "-t", sha]);

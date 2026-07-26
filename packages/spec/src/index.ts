@@ -65,3 +65,13 @@ export {
 } from "./versions.js";
 
 export { memoryJsonSchema } from "./json-schema.js";
+
+export {
+  WORKSPACE_NAME_RE,
+  workspaceMemberSchema,
+  workspaceManifestSchema,
+  WorkspaceManifestError,
+  parseWorkspaceManifest,
+  type WorkspaceMember,
+  type WorkspaceManifest,
+} from "./workspace.js";
