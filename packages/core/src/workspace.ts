@@ -91,15 +91,40 @@ export interface ResolvedWorkspace {
  * A URL with no host (a filesystem remote) canonicalises to its trimmed
  * path, case preserved, because local filesystems do make case distinctions.
  */
+// Plain string walks rather than regexes throughout: the equivalent
+// patterns (`\/+$`, an ambiguous host match) backtrack polynomially on
+// adversarial input, and CodeQL rightly refuses them even where the input
+// is a local manifest.
+function trimSlashes(path: string, edge: "both" | "trailing"): string {
+  let start = 0;
+  let end = path.length;
+  if (edge === "both") while (start < end && path[start] === "/") start += 1;
+  while (end > start && path[end - 1] === "/") end -= 1;
+  return path.slice(start, end);
+}
+
+function stripPath(path: string): string {
+  const bare = trimSlashes(path, "both");
+  return bare.endsWith(".git") ? bare.slice(0, -".git".length) : bare;
+}
+
+/** The `host` of `user@host:path`, or null when the shape does not fit. */
+function scpLikeHost(head: string): string | null {
+  if (/\s/.test(head)) return null;
+  const at = head.indexOf("@");
+  if (at === head.length - 1) return null;
+  const host = at >= 0 ? head.slice(at + 1) : head;
+  // A dot flanked by non-dots, as a hostname has — this is what keeps
+  // `C:/repos` and a relative `dir:thing` reading as paths, not hosts.
+  const dot = host.indexOf(".");
+  if (dot <= 0 || dot === host.length - 1) return null;
+  if (host.includes("/")) return null;
+  return host;
+}
+
 export function canonicalRemote(url: string): string | null {
   const trimmed = url.trim();
   if (trimmed === "") return null;
-
-  const strip = (path: string): string =>
-    path
-      .replace(/^\/+/, "")
-      .replace(/\/+$/, "")
-      .replace(/\.git$/, "");
 
   // Scheme form: ssh://git@host:2222/acme/repo.git, https://host/acme/repo
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
@@ -111,21 +136,26 @@ export function canonicalRemote(url: string): string | null {
     }
     if (parsed.hostname === "") {
       // file:// — a filesystem identity, not a hosted one.
-      return strip(parsed.pathname);
+      return stripPath(parsed.pathname);
     }
-    return `${parsed.hostname.toLowerCase()}/${strip(
+    return `${parsed.hostname.toLowerCase()}/${stripPath(
       parsed.pathname
     ).toLowerCase()}`;
   }
 
   // scp-like form: git@host:acme/repo.git
-  const scp = /^(?:[^@\s]+@)?([^:/\s]+\.[^:/\s]+):(.+)$/.exec(trimmed);
-  if (scp) {
-    return `${scp[1]!.toLowerCase()}/${strip(scp[2]!).toLowerCase()}`;
+  const colon = trimmed.indexOf(":");
+  if (colon > 0 && colon < trimmed.length - 1) {
+    const host = scpLikeHost(trimmed.slice(0, colon));
+    if (host !== null) {
+      return `${host.toLowerCase()}/${stripPath(
+        trimmed.slice(colon + 1)
+      ).toLowerCase()}`;
+    }
   }
 
   // A plain filesystem path.
-  return strip(trimmed) === "" ? null : trimmed.replace(/\/+$/, "");
+  return stripPath(trimmed) === "" ? null : trimSlashes(trimmed, "trailing");
 }
 
 function expandPath(raw: string, home: string, baseDir: string): string {
