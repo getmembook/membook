@@ -95,6 +95,37 @@ export async function status(options: StatusOptions): Promise<void> {
     log("");
   }
 
+  // Mixed-version stores are legal indefinitely — this is information, not a
+  // health warning. Nothing forces the rewrite; the count just stays visible
+  // until someone chooses to close it.
+  if (report.belowCurrent > 0) {
+    log(
+      wrap(
+        `${report.belowCurrent} ${plural(
+          report.belowCurrent,
+          "memory is",
+          "memories are"
+        )} written at an older memfile version. Still perfectly readable — ${plural(
+          report.belowCurrent,
+          "it stays",
+          "they stay"
+        )} as ${plural(
+          report.belowCurrent,
+          "it is",
+          "they are"
+        )} until you choose to rewrite ${plural(
+          report.belowCurrent,
+          "it",
+          "them"
+        )}.`
+      )
+    );
+    log(
+      dim("  membook migrate            rewrite them in one reviewable diff")
+    );
+    log("");
+  }
+
   const stale = report.byStatus["stale"] ?? 0;
   const invalid = report.byStatus["invalidated"] ?? 0;
   const unverified = report.byStatus["unverified"] ?? 0;

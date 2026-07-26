@@ -550,12 +550,10 @@ describe("parsing", () => {
       'created: "2026-07-21T16:42:00Z"',
       "created: 2026-07-21T16:42:00Z"
     );
-    const { frontmatter } = parseMemfile(unquoted, "x.mem.md");
-    expect(frontmatter.created).toBe("2026-07-21T16:42:00Z");
+    const memfile = parseMemfile(unquoted, "x.mem.md");
+    expect(memfile.frontmatter.created).toBe("2026-07-21T16:42:00Z");
     // ...and re-serializing restores the canonical quoted form.
-    expect(serializeMemfileRecord({ frontmatter, body: "A statement." })).toBe(
-      text
-    );
+    expect(serializeMemfileRecord(memfile)).toBe(text);
   });
 
   it("safeParse succeeds on a valid memfile", () => {

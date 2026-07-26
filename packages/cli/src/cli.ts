@@ -5,7 +5,14 @@ import { MEMORY_TYPES, type MemoryType } from "@membook/spec";
 import { init } from "./commands/init.js";
 import { status } from "./commands/status.js";
 import { review } from "./commands/review.js";
-import { book, recall, reindex, remember, verify } from "./commands/misc.js";
+import {
+  book,
+  migrate,
+  recall,
+  reindex,
+  remember,
+  verify,
+} from "./commands/misc.js";
 import { seed } from "./commands/seed.js";
 import { distill } from "./commands/distill.js";
 import { hookPrompt } from "./commands/hook.js";
@@ -18,7 +25,9 @@ import { die } from "./output.js";
  * release, forever. dist/cli.js sits one level below package.json in the
  * published tarball, so the path holds exactly where the code runs.
  */
-const VERSION: string = createRequire(import.meta.url)("../package.json").version;
+const VERSION: string = createRequire(import.meta.url)(
+  "../package.json"
+).version;
 
 const program = new Command();
 
@@ -108,6 +117,16 @@ program
   .description("rebuild the search index from the files")
   .action(async () => {
     await reindex({ root: root() });
+  });
+
+program
+  .command("migrate")
+  .description(
+    "rewrite memories to the current memfile form, as a diff to review"
+  )
+  .option("--dry-run", "report what would be rewritten, write nothing")
+  .action(async (opts: { dryRun?: boolean }) => {
+    await migrate({ root: root(), ...(opts.dryRun ? { dryRun: true } : {}) });
   });
 
 program

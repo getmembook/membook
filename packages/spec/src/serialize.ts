@@ -1,6 +1,7 @@
 import matter from "gray-matter";
 import { Document, Scalar, isScalar, isSeq, visit } from "yaml";
 import {
+  MEMFILE_SPEC_VERSION,
   memorySchema,
   memoryWireSchema,
   type Memory,
@@ -15,6 +16,14 @@ import { readDeclaredVersion, schemaForVersion } from "./versions.js";
 export interface Memfile {
   frontmatter: Memory;
   body: string;
+  /**
+   * The memfile version this file DECLARED on disk — as distinct from the
+   * shape it parsed into, which is always the current one (older versions are
+   * read by widening). `migrate` and `status` need the declared number: it is
+   * the only way to tell "this file is old" from "this file was widened",
+   * because after parsing the two are deliberately indistinguishable.
+   */
+  version: number;
 }
 
 /**
@@ -187,7 +196,14 @@ export function parseMemfile(source: string, file?: string): Memfile {
     );
   }
 
-  return { frontmatter: result.data, body };
+  // A null declared version cannot survive to here: the schema requires the
+  // `memfile` literal, so a file without a usable one has already failed
+  // validation above. The fallback exists for the type, not for a case.
+  return {
+    frontmatter: result.data,
+    body,
+    version: declared ?? MEMFILE_SPEC_VERSION,
+  };
 }
 
 /** Non-throwing parse, for bulk reads that quarantine failures. */

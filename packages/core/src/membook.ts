@@ -1,4 +1,4 @@
-import type { MemoryInput } from "@membook/spec";
+import { MEMFILE_SPEC_VERSION, type MemoryInput } from "@membook/spec";
 import { repoPaths, type RepoPaths } from "./paths.js";
 import {
   MemoryStore,
@@ -16,6 +16,11 @@ import { search, type SearchHit, type SearchOptions } from "./search.js";
 import { verifyPass, type VerifyOptions, type VerifyReport } from "./verify.js";
 import { recall, type RecallOptions, type RecallResult } from "./recall.js";
 import { compileBook, writeBook, type BookReport } from "./book.js";
+import {
+  migrateStore,
+  type MigrateOptions,
+  type MigrateReport,
+} from "./migrate.js";
 import { scanForSecrets } from "./secret-scan.js";
 import { WriteBlockedError, type QuarantineRecord } from "./errors.js";
 import {
@@ -39,6 +44,10 @@ export interface StatusReport {
   /** Files this Membook is too old to read. Not damaged — just newer. */
   needsNewerMembook: Array<{ file: string; found: number; supported: number }>;
   byStatus: Record<string, number>;
+  /** How many files declare each memfile version. Mixed stores are legal. */
+  byVersion: Record<number, number>;
+  /** Files below the current memfile version. `membook migrate` closes it. */
+  belowCurrent: number;
 }
 
 /**
@@ -275,6 +284,27 @@ export class Membook {
     return report;
   }
 
+  /**
+   * Rewrite every memory to the current canonical form, as a reviewable diff.
+   *
+   * Reindexes afterwards when anything was rewritten, for the same reason
+   * `verify` does: the pass writes through the store, which is file-only by
+   * design, and the index must follow the files.
+   */
+  async migrate(options: MigrateOptions = {}): Promise<MigrateReport> {
+    const report = await migrateStore(this.store, options);
+    if (!report.dryRun) {
+      this.instrumentation.record({
+        event: "migrate",
+        examined: report.examined,
+        rewritten: report.rewritten.length,
+        to: MEMFILE_SPEC_VERSION,
+      });
+      if (report.rewritten.length > 0) await this.reindex();
+    }
+    return report;
+  }
+
   async status(): Promise<StatusReport> {
     const { memories, quarantined, needsNewerMembook } =
       await this.store.readAll();
@@ -284,9 +314,14 @@ export class Membook {
         db.prepare("SELECT COUNT(*) AS n FROM memories").get() as { n: number }
       ).n;
       const byStatus: Record<string, number> = {};
+      const byVersion: Record<number, number> = {};
+      let belowCurrent = 0;
       for (const memory of memories) {
         const status = memory.memfile.frontmatter.status;
         byStatus[status] = (byStatus[status] ?? 0) + 1;
+        const version = memory.memfile.version;
+        byVersion[version] = (byVersion[version] ?? 0) + 1;
+        if (version < MEMFILE_SPEC_VERSION) belowCurrent += 1;
       }
       return {
         indexed,
@@ -294,6 +329,8 @@ export class Membook {
         quarantined,
         needsNewerMembook,
         byStatus,
+        byVersion,
+        belowCurrent,
       };
     } finally {
       db.close();

@@ -20,6 +20,7 @@ import { distill } from "./commands/distill.js";
 import { HOOK_MAX_HITS, hookPrompt } from "./commands/hook.js";
 import {
   book,
+  migrate,
   recall,
   recheckerFromEnv,
   reindex,
@@ -610,6 +611,39 @@ describe("the real binary", () => {
     const { stdout } = await execa("node", [bin, "--help"]);
     expect(stdout).toContain("membook");
     expect(stdout).toContain("review");
+  });
+
+  // The injection-blindness convention: migrate must be proven through the
+  // installed entry point against real files, not only through its function.
+  runIf("migrates a real store back to canonical form", async () => {
+    await init({ root, log });
+    await remember({
+      root,
+      statement: "Deploys are gated on the migration job finishing first.",
+      type: "convention",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    const dir = join(root, ".membook/memories");
+    const { readdir } = await import("node:fs/promises");
+    const [file] = await readdir(dir);
+    const path = join(dir, file!);
+    const canonical = await readFile(path, "utf8");
+    await writeFile(
+      path,
+      canonical.replace(/created: "([^"]+)"/, "created: $1"),
+      "utf8"
+    );
+
+    const { stdout, exitCode } = await execa("node", [
+      bin,
+      "-C",
+      root,
+      "migrate",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("1 of 1 rewritten");
+    expect(await readFile(path, "utf8")).toBe(canonical);
   });
 });
 
@@ -1431,6 +1465,82 @@ describe("book and reindex", () => {
   });
 });
 
+describe("migrate", () => {
+  const memoriesDir = () => join(root, ".membook/memories");
+
+  async function recorded(): Promise<{ file: string; path: string }> {
+    await init({ root, log });
+    await remember({
+      root,
+      statement: "Auth tokens refresh on the request boundary.",
+      type: "gotcha",
+      paths: ["src/auth.ts"],
+      log,
+    });
+    const { readdir } = await import("node:fs/promises");
+    const [file] = await readdir(memoriesDir());
+    return { file: file!, path: join(memoriesDir(), file!) };
+  }
+
+  /** Un-quote the created timestamp: still valid, no longer canonical. */
+  async function drift(path: string): Promise<string> {
+    const text = await readFile(path, "utf8");
+    const drifted = text.replace(/created: "([^"]+)"/, "created: $1");
+    await writeFile(path, drifted, "utf8");
+    return text;
+  }
+
+  it("says so when the store is already current", async () => {
+    await recorded();
+    lines = [];
+    await migrate({ root, log });
+    expect(flat()).toContain("already in the current form (memfile v1)");
+  });
+
+  it("rewrites a drifted file and tells the human to review the diff", async () => {
+    const { file, path } = await recorded();
+    const canonical = await drift(path);
+
+    lines = [];
+    await migrate({ root, log });
+    expect(flat()).toContain("1 of 1 rewritten to the current form");
+    expect(output()).toContain(file.replace(/\.mem\.md$/, ""));
+    expect(flat()).toContain("Review the diff");
+    expect(await readFile(path, "utf8")).toBe(canonical);
+
+    const events = (await readEvents(root)).filter(
+      (e) => e.event === "migrate"
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ examined: 1, rewritten: 1 });
+  });
+
+  it("--dry-run reports and writes nothing", async () => {
+    const { path } = await recorded();
+    await drift(path);
+    const drifted = await readFile(path, "utf8");
+
+    lines = [];
+    await migrate({ root, log, dryRun: true });
+    expect(flat()).toContain("1 of 1 would be rewritten");
+    expect(flat()).toContain("Nothing was written");
+    expect(await readFile(path, "utf8")).toBe(drifted);
+  });
+
+  it("skips a file from the future rather than downgrading it", async () => {
+    await recorded();
+    const future = "---\nmemfile: 99\nid: m-ffff\n---\n\nFrom a newer tool.\n";
+    const path = join(memoriesDir(), "m-ffff.mem.md");
+    await writeFile(path, future, "utf8");
+
+    lines = [];
+    await migrate({ root, log });
+    expect(flat()).toContain("skipped");
+    expect(flat()).toContain("m-ffff.mem.md is v99");
+    expect(await readFile(path, "utf8")).toBe(future);
+  });
+});
+
 /**
  * The hook's own gate, measured on 61 real prompts. Vague prompts were 29.5%
  * of real traffic and produced the worst injections — "WHat is next" pulled in
@@ -1454,7 +1564,11 @@ describe("recall hook ignores vague prompts", () => {
   });
 
   it("says nothing for a prompt with too few content terms", async () => {
-    for (const q of ["WHat is next", "what is next for us", "done - what now"]) {
+    for (const q of [
+      "WHat is next",
+      "what is next for us",
+      "done - what now",
+    ]) {
       lines = [];
       await hookPrompt({ root, log, readInput: async () => event(q) });
       expect(output()).toBe("");

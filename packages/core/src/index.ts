@@ -53,6 +53,7 @@ export {
   type DistillEvent,
   type WriteBlockedEvent,
   type BookEvent,
+  type MigrateEvent,
 } from "./instrumentation.js";
 export { FAKE_SECRETS } from "./fake-secrets.js";
 export {
@@ -104,6 +105,12 @@ export {
   type SeedOptions,
   type SeedSourceFile,
 } from "./seed.js";
+export {
+  migrateStore,
+  type MigrateEntry,
+  type MigrateOptions,
+  type MigrateReport,
+} from "./migrate.js";
 export {
   compileBook,
   writeBook,
