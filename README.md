@@ -115,6 +115,7 @@ membook verify           re-check memories against the current code
 membook review           ratify or delete what a human has not seen
 membook book             regenerate MEMBOOK.md
 membook reindex          rebuild the index from the files
+membook migrate          rewrite memories to the current memfile form, as a diff
 ```
 
 `seed` and `distill` need a model (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`).

@@ -48,6 +48,13 @@ describe("read tolerance", () => {
     expect(memfile.frontmatter.memfile).toBe(1);
   });
 
+  // The declared version travels with the parse result, because after
+  // widening it is the only remaining trace of what the file actually said —
+  // `migrate` and `status` cannot recover it from the frontmatter shape.
+  it("reports the version the file declared", () => {
+    expect(parseMemfile(v1()).version).toBe(1);
+  });
+
   it("parses every golden example", async () => {
     const files = (await readdir(EXAMPLES)).filter((f) =>
       f.endsWith(".mem.md")

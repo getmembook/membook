@@ -129,6 +129,19 @@ export interface BookEvent {
   tokens: number;
 }
 
+/**
+ * One migrate pass over the store. Recorded even when nothing was rewritten:
+ * "we checked and the store was already current" is evidence too, and it is
+ * the only way the log can tell an unmigrated store from an unexamined one.
+ */
+export interface MigrateEvent {
+  event: "migrate";
+  examined: number;
+  rewritten: number;
+  /** The memfile version everything was rewritten to. */
+  to: number;
+}
+
 export type MembookEvent =
   | RecallEvent
   | RememberEvent
@@ -137,7 +150,8 @@ export type MembookEvent =
   | ReviewEvent
   | DistillEvent
   | WriteBlockedEvent
-  | BookEvent;
+  | BookEvent
+  | MigrateEvent;
 
 export interface Instrumentation {
   record(event: MembookEvent): void;

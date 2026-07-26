@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { MemoryInput, MemoryType } from "@membook/spec";
+import {
+  MEMFILE_SPEC_VERSION,
+  type MemoryInput,
+  type MemoryType,
+} from "@membook/spec";
 import {
   AnthropicProvider,
   LlmRechecker,
@@ -69,6 +73,120 @@ export async function reindex(options: CommonOptions): Promise<void> {
     log(dim("  The files were left in place. Repair them and reindex again."));
   }
   log("");
+}
+
+export interface MigrateCliOptions extends CommonOptions {
+  dryRun?: boolean;
+}
+
+/**
+ * Rewrite the store to the current canonical form, as a diff to review.
+ *
+ * This is the write half of the version machinery: reading tolerates every
+ * version ever published, and nothing rewrites a committed file as a side
+ * effect of having read it. When the store should move forward — an older
+ * memfile version, or a hand-edited file that drifted from canonical
+ * serialization — this command does it explicitly, in one pass a human can
+ * read before committing.
+ */
+export async function migrate(options: MigrateCliOptions): Promise<void> {
+  const log = out(options);
+  const membook = new Membook(options.root, { instrumentation: true });
+  const report = await membook.migrate({
+    ...(options.dryRun ? { dryRun: true } : {}),
+  });
+
+  log("");
+
+  if (
+    report.examined === 0 &&
+    report.quarantined.length === 0 &&
+    report.needsNewerMembook.length === 0
+  ) {
+    log(ok("Nothing to migrate — no memories are recorded yet."));
+    log("");
+    return;
+  }
+
+  if (report.rewritten.length === 0) {
+    log(
+      ok(
+        `All ${report.examined} ${plural(
+          report.examined,
+          "memory is",
+          "memories are"
+        )} already in the current form (memfile v${MEMFILE_SPEC_VERSION}).`
+      )
+    );
+  } else {
+    log(
+      heading(
+        `${report.rewritten.length} of ${report.examined} ${
+          report.dryRun ? "would be rewritten" : "rewritten"
+        } to the current form (memfile v${MEMFILE_SPEC_VERSION})`
+      )
+    );
+    for (const entry of report.rewritten) {
+      log(
+        `  ${entry.id}  ${dim(
+          entry.reason === "older-version"
+            ? `v${entry.from} → v${entry.to}`
+            : "canonical form restored"
+        )}`
+      );
+    }
+    log("");
+    if (report.dryRun) {
+      log(dim("  Nothing was written. Run without --dry-run to apply."));
+    } else {
+      log(
+        wrap(
+          "The files changed on disk and nothing was committed. Review the diff and commit it as its own change — a migration is a rewrite a human reads, never a side effect."
+        )
+      );
+    }
+  }
+  log("");
+
+  if (report.needsNewerMembook.length > 0) {
+    const n = report.needsNewerMembook.length;
+    log(
+      warn(
+        `${n} ${plural(n, "file was", "files were")} skipped: ${plural(
+          n,
+          "it needs",
+          "they need"
+        )} a newer Membook than this one (` +
+          report.needsNewerMembook
+            .map((f) => `${f.file} is v${f.found}`)
+            .join(", ") +
+          `).`
+      )
+    );
+    log(
+      dim(
+        "  Upgrade Membook rather than editing them — an older tool must not rewrite a newer file."
+      )
+    );
+    log("");
+  }
+
+  if (report.quarantined.length > 0) {
+    const n = report.quarantined.length;
+    log(
+      warn(
+        `${n} ${plural(
+          n,
+          "file failed validation and was",
+          "files failed validation and were"
+        )} left untouched:`
+      )
+    );
+    for (const q of report.quarantined)
+      log(`    ${q.file}  ${dim(q.issues[0] ?? "")}`);
+    log(dim("  Repair the file, or delete it. Nothing was thrown away."));
+    log("");
+  }
 }
 
 export interface RecallOptions extends CommonOptions {
