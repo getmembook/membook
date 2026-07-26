@@ -10,8 +10,8 @@ Every memory is anchored to specific files. Anything whose anchored code has
 changed since it was last checked is withheld from this file rather than
 asserted.
 
-It carries all 11 eligible memories. This file is generated, never edited by
-hand — corrections belong in `.membook/memories/`.
+It carries the 11 highest-value of 12 eligible memories. This file is
+generated, never edited by hand — corrections belong in `.membook/memories/`.
 
 Entries marked `(unverified)` have not been checked against current code yet.
 Treat them as informed leads rather than established fact.

@@ -1,5 +1,5 @@
 ---
-memfile: 1
+memfile: 2
 id: m-6f7c
 type: gotcha
 status: verified

@@ -1,5 +1,5 @@
 ---
-memfile: 1
+memfile: 2
 id: m-fa22
 type: gotcha
 status: unverified
