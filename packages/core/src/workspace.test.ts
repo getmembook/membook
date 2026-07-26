@@ -213,8 +213,9 @@ describe("resolveWorkspace", () => {
   });
 
   it("defaults the manifest to ~/.membook/workspace.yaml", () => {
+    // join(), not a literal: the separator is the platform's business.
     expect(defaultWorkspacePath("/home/dev")).toBe(
-      "/home/dev/.membook/workspace.yaml"
+      join("/home/dev", ".membook", "workspace.yaml")
     );
   });
 });
