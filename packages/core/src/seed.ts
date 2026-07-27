@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { execa } from "execa";
-import type { MemoryInput } from "@membook/spec";
+import { MEMFILE_SPEC_VERSION, type MemoryInput } from "@membook/spec";
 import type { ModelProvider } from "./provider.js";
 import type { Instrumentation } from "./instrumentation.js";
 import { NullInstrumentation } from "./instrumentation.js";
@@ -308,7 +308,7 @@ export function seedFrontmatter(
   context: { id: string; commit: string; timestamp: string; model: string }
 ): MemoryInput {
   return {
-    memfile: 1,
+    memfile: MEMFILE_SPEC_VERSION,
     id: context.id,
     type: candidate.type,
     status: "unverified",

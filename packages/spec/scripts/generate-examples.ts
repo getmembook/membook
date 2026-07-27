@@ -38,7 +38,7 @@ const examples: Example[] = [
       "deleted at any time without data loss.",
     ].join("\n"),
     frontmatter: {
-      memfile: 1,
+      memfile: 2,
       type: "decision",
       status: "verified",
       scope: "repo",
@@ -67,7 +67,7 @@ const examples: Example[] = [
       "blocks forever acquiring the write lock.",
     ].join("\n"),
     frontmatter: {
-      memfile: 1,
+      memfile: 2,
       type: "gotcha",
       status: "verified",
       scope: "repo",
@@ -99,7 +99,7 @@ const examples: Example[] = [
       "`membook status` — never silently skipped.",
     ].join("\n"),
     frontmatter: {
-      memfile: 1,
+      memfile: 2,
       type: "convention",
       status: "verified",
       scope: "repo",
@@ -128,7 +128,7 @@ const examples: Example[] = [
       "free re-verify and touched anchors to a single targeted LLM re-check.",
     ].join("\n"),
     frontmatter: {
-      memfile: 1,
+      memfile: 2,
       type: "map",
       status: "verified",
       scope: "repo",
@@ -161,7 +161,7 @@ const examples: Example[] = [
       "to the plain `git` CLI via execa instead.",
     ].join("\n"),
     frontmatter: {
-      memfile: 1,
+      memfile: 2,
       type: "deadend",
       // Stale, and never verified: written, then the anchored code changed
       // before anything checked it. No `verified` timestamp exists, because
@@ -177,6 +177,42 @@ const examples: Example[] = [
         origin: "authored",
         author: "agent",
         session: "sess-01H8V2C1",
+        agent: "claude-code",
+        model: "claude-opus-4-8",
+      },
+    },
+  },
+  {
+    body: [
+      "The gateway's rate-limit config is the contract this service consumes:",
+      "`config/limits.yaml` in `platform-gateway` defines the per-tenant buckets.",
+      "",
+      "Anchored cross-repo so a limits change flips this stale in the consumer",
+      "BEFORE an agent writes code against the old shape (contract-watch).",
+    ].join("\n"),
+    frontmatter: {
+      memfile: 2,
+      type: "map",
+      status: "unverified",
+      scope: "repo",
+      confidence: 0.85,
+      created: "2026-07-25T10:12:00Z",
+      // An xgit anchor pins into ANOTHER repository, by workspace member
+      // name; `commit` is the last-verified SHA in THAT repo's history. A
+      // local git anchor alongside it records where the consumption lives.
+      anchors: [
+        {
+          kind: "xgit",
+          repo: "platform-gateway",
+          path: "config/limits.yaml",
+          commit: COMMIT_B,
+        },
+        { path: "src/clients/gateway.ts", commit: COMMIT_A },
+      ],
+      provenance: {
+        origin: "authored",
+        author: "agent",
+        session: "sess-01H8ZQ7F",
         agent: "claude-code",
         model: "claude-opus-4-8",
       },

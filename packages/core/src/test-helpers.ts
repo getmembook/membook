@@ -1,7 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { computeMemoryId, type MemoryInput } from "@membook/spec";
+import {
+  MEMFILE_SPEC_VERSION,
+  computeMemoryId,
+  type MemoryInput,
+} from "@membook/spec";
 import { Membook } from "./membook.js";
 
 const COMMIT = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
@@ -28,7 +32,7 @@ export function memoryFor(spec: SeedSpec): {
   return {
     body: spec.body,
     frontmatter: {
-      memfile: 1,
+      memfile: MEMFILE_SPEC_VERSION,
       id: computeMemoryId(spec.body),
       type: spec.type ?? "gotcha",
       status: spec.status ?? "unverified",

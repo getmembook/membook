@@ -44,8 +44,35 @@ const cases: Array<{ name: string; anchor: Anchor; text: string }> = [
   },
   {
     name: "single-line range collapses",
-    anchor: { kind: "git", path: "src/auth.ts", line_range: [42, 42], commit: COMMIT },
+    anchor: {
+      kind: "git",
+      path: "src/auth.ts",
+      line_range: [42, 42],
+      commit: COMMIT,
+    },
     text: `git:src/auth.ts:L42@${COMMIT}`,
+  },
+  {
+    name: "cross-repo anchor",
+    anchor: {
+      kind: "xgit",
+      repo: "platform-gateway",
+      path: "config/limits.yaml",
+      commit: COMMIT,
+    },
+    text: `xgit:platform-gateway/config/limits.yaml@${COMMIT}`,
+  },
+  {
+    name: "cross-repo anchor with symbol and range",
+    anchor: {
+      kind: "xgit",
+      repo: "platform-gateway",
+      path: "config/limits.yaml",
+      symbol: "rateLimits",
+      line_range: [3, 12],
+      commit: COMMIT,
+    },
+    text: `xgit:platform-gateway/config/limits.yaml#rateLimits:L3-12@${COMMIT}`,
   },
 ];
 
@@ -69,24 +96,35 @@ describe("anchor grammar", () => {
   });
 
   it("rejects a missing commit", () => {
-    expect(() => parseAnchor("git:src/auth.ts")).toThrow(MemfileValidationError);
+    expect(() => parseAnchor("git:src/auth.ts")).toThrow(
+      MemfileValidationError
+    );
   });
 
   it("rejects a short commit", () => {
     expect(() => parseAnchor("git:src/auth.ts@9f1c2d3")).toThrow(
-      MemfileValidationError,
+      MemfileValidationError
     );
   });
 
   it("rejects an unknown anchor kind", () => {
     expect(() => parseAnchor(`lockfile:pnpm-lock.yaml@${COMMIT}`)).toThrow(
-      MemfileValidationError,
+      MemfileValidationError
     );
+  });
+
+  // Member names cannot contain `/`, so the first slash splits repo from
+  // path unambiguously — an uppercase "member" must fail as a bad name, not
+  // silently reparse as part of the path.
+  it("rejects an xgit anchor whose repo is not a member name", () => {
+    expect(() =>
+      parseAnchor(`xgit:Gateway/config/limits.yaml@${COMMIT}`)
+    ).toThrow(/member name/);
   });
 
   it("rejects an absolute path through the string grammar", () => {
     expect(() => parseAnchor(`git:/etc/passwd@${COMMIT}`)).toThrow(
-      /repo-relative/,
+      /repo-relative/
     );
   });
 });

@@ -8,7 +8,7 @@ import type { Instrumentation, MembookEvent } from "./instrumentation.js";
 const COMMIT = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
 
 const MEMORY: Memory = {
-  memfile: 1,
+  memfile: 2,
   id: "m-4f2a",
   type: "gotcha",
   status: "verified",

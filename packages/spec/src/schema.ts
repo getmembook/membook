@@ -1,10 +1,16 @@
 import { z } from "zod";
+import { WORKSPACE_NAME_RE } from "./workspace.js";
 
 /**
  * Memfile spec version. Bump only for breaking changes to the frontmatter
  * contract; additive optional fields do not require a bump.
+ *
+ * 2 — the `xgit` cross-repo anchor kind. A v1 reader would reject any file
+ * carrying one, which is exactly what the version field exists to say.
+ * v1 files remain readable forever: see `schema-v1.ts` and the registry in
+ * `versions.ts`.
  */
-export const MEMFILE_SPEC_VERSION = 1;
+export const MEMFILE_SPEC_VERSION = 2;
 
 export const MEMORY_TYPES = [
   "decision",
@@ -28,7 +34,7 @@ export const memoryIdSchema = z
   .string()
   .regex(/^m-[0-9a-f]{4,12}$/, "id must match m-<4..12 lowercase hex chars>");
 
-const repoRelativePath = z
+export const repoRelativePath = z
   .string()
   .min(1, "anchor path must not be empty")
   .refine((p) => !p.startsWith("/") && !p.startsWith("~"), {
@@ -41,7 +47,7 @@ const repoRelativePath = z
     error: "anchor path must not end with /",
   });
 
-const commitSha = z
+export const commitSha = z
   .string()
   .regex(/^[0-9a-f]{40}$/, "commit must be a full 40-char lowercase hex SHA");
 
@@ -72,11 +78,36 @@ export const gitAnchorSchema = z
   .strict();
 
 /**
- * v0.1 has exactly one anchor kind. This becomes a discriminated union in
- * v0.2 — note that Zod discriminates before defaults apply, so that change
- * must normalize a missing `kind` to "git" before the union.
+ * A cross-repo anchor: the same claim, pinned into a DIFFERENT repository,
+ * resolved through the workspace manifest by member name. `commit` is the
+ * last-verified SHA in THAT repo's history. `kind` has no default here —
+ * crossing a repository boundary is something a file must say out loud.
  */
-export const anchorSchema = gitAnchorSchema;
+export const xgitAnchorSchema = z
+  .object({
+    kind: z.literal("xgit"),
+    /** Workspace member name — the manifest resolves it to a checkout. */
+    repo: z
+      .string()
+      .regex(
+        WORKSPACE_NAME_RE,
+        "repo must be a workspace member name (lowercase letters, digits, dot, dash, underscore)"
+      ),
+    path: repoRelativePath,
+    symbol: z.string().min(1).optional(),
+    line_range: lineRangeSchema.optional(),
+    commit: commitSha,
+  })
+  .strict();
+
+/**
+ * A plain union, with `git` FIRST — that ordering is load-bearing. Zod
+ * discriminates before defaults apply, so a discriminated union would reject
+ * the spec-legal anchor that omits `kind`; the plain union lets the git
+ * branch's default claim it, and an explicit `kind: xgit` falls through to
+ * the second branch on the literal mismatch.
+ */
+export const anchorSchema = z.union([gitAnchorSchema, xgitAnchorSchema]);
 
 export const PROVENANCE_ORIGINS = ["distilled", "authored"] as const;
 export const PROVENANCE_AUTHORS = ["human", "agent"] as const;
@@ -179,7 +210,7 @@ function toCanonicalTimestamp(date: Date): string {
  * the canonical form — an author writing `2026-07-21T22:12:00+05:30` gets a
  * correct UTC timestamp, not a rejection.
  */
-const isoTimestampString = z.iso
+export const isoTimestampString = z.iso
   .datetime({ offset: true })
   .transform((value) => toCanonicalTimestamp(new Date(value)));
 
@@ -193,7 +224,7 @@ const isoTimestampString = z.iso
  * THIS implementation, not part of the Memfile standard. Writes go through
  * `memoryWireSchema`, so a Date can never reach disk.
  */
-const isoTimestamp = z.union([
+export const isoTimestamp = z.union([
   isoTimestampString,
   z.date().transform(toCanonicalTimestamp),
 ]);
@@ -210,7 +241,17 @@ const memoryObject = z
     id: memoryIdSchema,
     type: z.enum(MEMORY_TYPES),
     status: z.enum(MEMORY_STATUSES),
-    scope: z.enum(MEMORY_SCOPES),
+    /**
+     * `user` is named in MEMORY_SCOPES but rejected here on purpose: it is
+     * RESERVED until the user store lands (v0.2 §8, ruled), where it becomes
+     * a discriminated variant that FORBIDS anchors. Accepting it early would
+     * put files in the world shaped like repo memories wearing the wrong
+     * scope — files the ruled shape would then have to break.
+     */
+    scope: z.enum(["repo", "team"], {
+      error:
+        "scope must be repo or team — `user` is reserved until the user store lands",
+    }),
     confidence: z.number().min(0).max(1),
     created: isoTimestampString,
     verified: isoTimestampString.optional(),
@@ -232,12 +273,12 @@ const memoryObject = z
  * there would force one to be invented, which is the failure this format
  * exists to prevent.
  */
-const requireVerifiedTimestamp = (m: {
+export const requireVerifiedTimestamp = (m: {
   status: string;
   verified?: string | undefined;
 }) => m.status !== "verified" || m.verified !== undefined;
 
-const verifiedTimestampIssue = {
+export const verifiedTimestampIssue = {
   error: "a memory with status `verified` must carry a verified timestamp",
   path: ["verified"],
 };
@@ -272,6 +313,7 @@ export type MemoryType = (typeof MEMORY_TYPES)[number];
 export type MemoryStatus = (typeof MEMORY_STATUSES)[number];
 export type MemoryScope = (typeof MEMORY_SCOPES)[number];
 export type GitAnchor = z.infer<typeof gitAnchorSchema>;
+export type XgitAnchor = z.infer<typeof xgitAnchorSchema>;
 export type Anchor = z.infer<typeof anchorSchema>;
 export type ProvenanceOrigin = (typeof PROVENANCE_ORIGINS)[number];
 export type ProvenanceAuthor = (typeof PROVENANCE_AUTHORS)[number];

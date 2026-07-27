@@ -58,7 +58,7 @@ These are settled, and the code enforces them:
 
 ```markdown
 ---
-memfile: 1
+memfile: 2
 id: m-6dd5
 type: gotcha
 status: verified

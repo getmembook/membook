@@ -25,7 +25,7 @@ afterEach(async () => {
 
 function memoryFor(body: string): MemoryInput {
   return {
-    memfile: 1,
+    memfile: 2,
     id: computeMemoryId(body),
     type: "gotcha",
     status: "unverified",

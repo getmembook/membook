@@ -36,7 +36,7 @@ async function seed(spec: {
   const status = spec.status ?? "verified";
   await membook.remember(
     {
-      memfile: 1,
+      memfile: 2,
       id,
       type: "gotcha",
       status,

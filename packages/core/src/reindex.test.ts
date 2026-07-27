@@ -105,7 +105,7 @@ describe("malformed files", () => {
     const victim = files.sort()[0]!;
     await writeFile(
       join(membook.paths.memories, victim),
-      "---\nmemfile: 1\nstatus: nonsense\n---\n\nBroken.\n",
+      "---\nmemfile: 2\nstatus: nonsense\n---\n\nBroken.\n",
       "utf8"
     );
 
@@ -122,7 +122,7 @@ describe("malformed files", () => {
     const membook = await seeded(root);
     const victim = (await readdir(membook.paths.memories)).sort()[0]!;
     const path = join(membook.paths.memories, victim);
-    await writeFile(path, "---\nmemfile: 1\n---\n\nBroken.\n", "utf8");
+    await writeFile(path, "---\nmemfile: 2\n---\n\nBroken.\n", "utf8");
 
     await membook.reindex();
 
@@ -139,7 +139,7 @@ describe("malformed files", () => {
     const path = join(membook.paths.memories, victim);
     const original = await readFile(path, "utf8");
 
-    await writeFile(path, "---\nmemfile: 1\n---\n\nBroken.\n", "utf8");
+    await writeFile(path, "---\nmemfile: 2\n---\n\nBroken.\n", "utf8");
     await membook.reindex();
     expect(await readdir(membook.paths.quarantine)).toHaveLength(1);
 

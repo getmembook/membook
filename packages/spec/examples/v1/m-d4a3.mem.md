@@ -1,5 +1,5 @@
 ---
-memfile: 2
+memfile: 1
 id: m-d4a3
 type: map
 status: verified

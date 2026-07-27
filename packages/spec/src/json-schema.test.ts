@@ -27,7 +27,7 @@ describe("JSON Schema export", () => {
         "created",
         "anchors",
         "provenance",
-      ]),
+      ])
     );
   });
 
@@ -52,7 +52,7 @@ describe("JSON Schema export", () => {
 
 describe("wire schema", () => {
   const wireMemory = {
-    memfile: 1 as const,
+    memfile: 2 as const,
     id: "m-4f2a",
     type: "gotcha" as const,
     status: "verified" as const,
@@ -75,7 +75,10 @@ describe("wire schema", () => {
   });
 
   it("rejects Date timestamps that the file schema tolerates", () => {
-    const withDate = { ...wireMemory, created: new Date("2026-07-21T16:42:00Z") };
+    const withDate = {
+      ...wireMemory,
+      created: new Date("2026-07-21T16:42:00Z"),
+    };
     expect(memoryWireSchema.safeParse(withDate).success).toBe(false);
     expect(memorySchema.safeParse(withDate).success).toBe(true);
   });

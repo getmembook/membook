@@ -109,8 +109,65 @@ describe("migrate", () => {
     );
   });
 
+  // The case the machinery was built for, exercisable at last: a file
+  // written by the released v0.1, brought forward in one reviewable rewrite.
+  it("migrates a real v1 file to the current version", async () => {
+    const v1 = [
+      "---",
+      "memfile: 1",
+      "id: m-0001",
+      "type: gotcha",
+      "status: unverified",
+      "scope: repo",
+      "confidence: 0.9",
+      'created: "2026-07-20T09:00:00Z"',
+      "anchors:",
+      "  - kind: git",
+      "    path: src/auth.ts",
+      `    commit: ${"a".repeat(40)}`,
+      "provenance:",
+      "  origin: authored",
+      "  author: human",
+      "---",
+      "",
+      "A claim recorded by the released v0.1.",
+      "",
+    ].join("\n");
+    await writeFile(join(memoriesDir(), "m-0001.mem.md"), v1, "utf8");
+
+    const before = await membook.status();
+    expect(before.byVersion).toEqual({ 1: 1, 2: 5 });
+    expect(before.belowCurrent).toBe(1);
+
+    const report = await membook.migrate();
+    expect(report.rewritten).toEqual([
+      {
+        id: "m-0001",
+        file: "m-0001.mem.md",
+        from: 1,
+        to: 2,
+        reason: "older-version",
+      },
+    ]);
+
+    const rewritten = await readFile(
+      join(memoriesDir(), "m-0001.mem.md"),
+      "utf8"
+    );
+    expect(rewritten).toContain("memfile: 2");
+    expect(rewritten).not.toContain("memfile: 1");
+    // Only the version moved — the claim, anchors and provenance survive.
+    expect(rewritten).toContain("A claim recorded by the released v0.1.");
+    expect(rewritten).toContain("path: src/auth.ts");
+
+    const after = await membook.status();
+    expect(after.byVersion).toEqual({ 2: 6 });
+    expect(after.belowCurrent).toBe(0);
+    expect((await membook.migrate()).rewritten).toEqual([]);
+  });
+
   it("reports a malformed file and leaves it in place", async () => {
-    const broken = "---\nmemfile: 1\nid: m-dead\n---\n\nMissing everything.\n";
+    const broken = "---\nmemfile: 2\nid: m-dead\n---\n\nMissing everything.\n";
     await writeFile(join(memoriesDir(), "m-dead.mem.md"), broken, "utf8");
 
     const report = await membook.migrate();

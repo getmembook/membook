@@ -1494,7 +1494,7 @@ describe("migrate", () => {
     await recorded();
     lines = [];
     await migrate({ root, log });
-    expect(flat()).toContain("already in the current form (memfile v1)");
+    expect(flat()).toContain("already in the current form (memfile v2)");
   });
 
   it("rewrites a drifted file and tells the human to review the diff", async () => {

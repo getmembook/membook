@@ -11,7 +11,7 @@ import {
   type WriteGuard,
   type Instrumentation,
 } from "@membook/core";
-import { MEMORY_TYPES, computeMemoryId, type MemoryInput } from "@membook/spec";
+import { MEMFILE_SPEC_VERSION, MEMORY_TYPES, computeMemoryId, type MemoryInput } from "@membook/spec";
 
 export const SERVER_NAME = "membook";
 // Runtime read, not a constant: the hardcoded predecessor shipped 0.1.1
@@ -270,7 +270,7 @@ export function createServer(options: CreateServerOptions): McpServer {
       // `unverified` is the honest status for something just written: no
       // verify pass has checked it against the code yet.
       const frontmatter: MemoryInput = {
-        memfile: 1,
+        memfile: MEMFILE_SPEC_VERSION,
         id,
         type,
         status: "unverified",
