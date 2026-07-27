@@ -187,3 +187,95 @@ export async function federatedRecall(
   };
 }
 
+
+export interface WorkspaceContextEntry {
+  member: string;
+  id: string;
+  type: string;
+  body: string;
+  /** The path in THIS repository their anchor points at. */
+  path: string;
+}
+
+export interface WorkspaceContextResult {
+  /** This repository's member name in the workspace, if it is one. */
+  selfMember?: string;
+  entries: WorkspaceContextEntry[];
+  /** Entries beyond the cap, counted rather than silently dropped. */
+  omitted: number;
+}
+
+/** Boot-context cap: injected context nobody asked for stays small. */
+export const WORKSPACE_CONTEXT_MAX = 5;
+
+/**
+ * What the neighbours know about HERE (v0.2 §7): cross-repo memories in
+ * other members' stores whose xgit anchors point INTO this repository.
+ *
+ * This is the session boot path only — never the committed book, which stays
+ * sovereign to its own store. Served live, capped, and counted, because it
+ * is testimony from other repositories: worth hearing, never asserted as
+ * this repo's own knowledge.
+ */
+export async function workspaceContext(
+  root: string,
+  workspace: ResolvedWorkspace
+): Promise<WorkspaceContextResult> {
+  const { realpath } = await import("node:fs/promises");
+  const canonical = async (p: string): Promise<string> => {
+    try {
+      return await realpath(p);
+    } catch {
+      return p;
+    }
+  };
+
+  const rootPath = await canonical(root);
+  let selfMember: string | undefined;
+  for (const member of workspace.members) {
+    if (
+      member.state === "resolved" &&
+      (await canonical(member.path)) === rootPath
+    ) {
+      selfMember = member.name;
+      break;
+    }
+  }
+  if (selfMember === undefined) return { entries: [], omitted: 0 };
+
+  const entries: WorkspaceContextEntry[] = [];
+  for (const member of workspace.members) {
+    if (member.state !== "resolved" || member.name === selfMember) continue;
+    const { memories } = await new MemoryStore(
+      repoPaths(member.path)
+    ).readAll();
+    for (const memory of memories) {
+      const fm = memory.memfile.frontmatter;
+      if (fm.status === "stale" || fm.status === "invalidated") continue;
+      for (const anchor of fm.anchors) {
+        if (anchor.kind === "xgit" && anchor.repo === selfMember) {
+          entries.push({
+            member: member.name,
+            id: fm.id,
+            type: fm.type,
+            body: memory.memfile.body,
+            path: anchor.path,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  // Deterministic: member name, then id — the same workspace state boots
+  // the same context every session, which is what prompt caches want.
+  entries.sort(
+    (a, b) => a.member.localeCompare(b.member) || a.id.localeCompare(b.id)
+  );
+  const capped = entries.slice(0, WORKSPACE_CONTEXT_MAX);
+  return {
+    selfMember,
+    entries: capped,
+    omitted: entries.length - capped.length,
+  };
+}

@@ -166,6 +166,10 @@ export {
   CROSS_REPO_WEIGHT,
   type FederatedRecallResult,
   type FederatedMemberResult,
+  workspaceContext,
+  WORKSPACE_CONTEXT_MAX,
+  type WorkspaceContextEntry,
+  type WorkspaceContextResult,
 } from "./federated-recall.js";
 export {
   canonicalRemote,

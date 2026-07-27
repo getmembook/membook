@@ -8,6 +8,7 @@ import {
   findMissingAnchorPaths,
   isGitRepository,
   resolveWorkspaceFile,
+  workspaceContext,
   type RecallHit,
   type ResolvedWorkspace,
   SecretScanGuard,
@@ -382,12 +383,21 @@ export function createServer(options: CreateServerOptions): McpServer {
 
       const total = status.onDisk;
       if (total === 0) {
+        // An empty local store is exactly when a neighbour's testimony is
+        // most valuable — the workspace context still gets its say.
+        const emptyLines = ["No memories recorded for this repository yet."];
+        const wsEmpty = await workspace();
+        if (wsEmpty) {
+          const context = await workspaceContext(root, wsEmpty);
+          for (const entry of context.entries) {
+            emptyLines.push(
+              `- [${entry.type} · from ${entry.member}, about ${entry.path}] ${entry.body}`
+            );
+          }
+        }
         return {
           content: [
-            {
-              type: "text" as const,
-              text: "No memories recorded for this repository yet.",
-            },
+            { type: "text" as const, text: emptyLines.join("\n") },
           ],
         };
       }
@@ -430,6 +440,26 @@ export function createServer(options: CreateServerOptions): McpServer {
                   .join(", ") +
                 ". Run `membook verify` to apply."
         );
+      }
+
+      // What the neighbours know about here (v0.2 §7): live, capped, never
+      // committed — testimony from other repositories, labeled as such.
+      const ws2 = await workspace();
+      if (ws2) {
+        const context = await workspaceContext(root, ws2);
+        if (context.entries.length > 0) {
+          lines.push(
+            `Workspace context — what other repositories know about this one:`
+          );
+          for (const entry of context.entries) {
+            lines.push(
+              `- [${entry.type} · from ${entry.member}, about ${entry.path}] ${entry.body}`
+            );
+          }
+          if (context.omitted > 0) {
+            lines.push(`(${context.omitted} more withheld to stay small.)`);
+          }
+        }
       }
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };

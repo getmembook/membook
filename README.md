@@ -93,14 +93,15 @@ wrote a memory, from what, and in what context, purely from which fields exist.
 
 | Package                            | What it is                                               | State                |
 | ---------------------------------- | -------------------------------------------------------- | -------------------- |
-| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator | **Built**, 114 tests |
-| [`@membook/core`](./packages/core) | Engine — store, index, verify, recall, book, distill     | **Built**, 232 tests |
-| [`@membook/mcp`](./packages/mcp)   | MCP server (`remember` / `recall` / `session_digest`)    | **Built**, 24 tests  |
+| [`@membook/spec`](./packages/spec) | The Memfile standard — schema, anchor grammar, validator | **Built**, 140 tests |
+| [`@membook/core`](./packages/core) | Engine — store, index, verify, recall, book, distill     | **Built**, 285 tests |
+| [`@membook/mcp`](./packages/mcp)   | MCP server (`remember` / `recall` / `session_digest`)    | **Built**, 25 tests  |
 | Verify pass                        | The verification loop + fixture harness                  | **Built**            |
 | Boot pack                          | `MEMBOOK.md` generator                                   | **Built**            |
 | The three seams                    | Secret scanner, LLM re-checker, instrumentation          | **Built**            |
-| [`membook`](./packages/cli)        | CLI — see below                                          | **Built**, 81 tests  |
+| [`membook`](./packages/cli)        | CLI — see below                                          | **Built**, 99 tests  |
 | Distillation                       | Docs and sessions → candidate memories                   | **Built**            |
+| Workspaces (v0.2)                  | Cross-repo anchors, verification, federated recall       | **Built**            |
 
 ### Commands
 
@@ -120,6 +121,34 @@ membook migrate          rewrite memories to the current memfile form, as a diff
 
 `seed` and `distill` need a model (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`).
 Everything else works without one.
+
+### Workspaces
+
+Federate verification and recall across the git checkouts your machine
+already has — no server, no sync, `git pull` is the propagation medium.
+Declare a resolution table at `~/.membook/workspace.yaml`:
+
+```yaml
+workspace: my-stack
+members:
+  payments-service:
+    path: ~/dev/payments
+    remote: git@github.com:acme/payments-service.git # identity check, optional
+  platform-gateway:
+    path: ~/dev/gateway
+```
+
+A memory may then anchor **into another repository** by member name
+(`kind: xgit`), and `verify --workspace` runs the same diff-and-follow logic
+inside that checkout: the producer merges a contract change, you pull, and
+your memory flips stale **before an agent writes code against the old
+shape**. A member this machine cannot use is reported `unresolvable` — not
+stale, not verified, never folded into either. `status -w` shows each
+member's resolution and how far it lags its upstream; `recall -w` also
+searches members' memories (served with `from <member>` provenance, via a
+read-only cache — Membook never writes inside a checkout it did not init);
+`book -w` lets cross-repo memories into `MEMBOOK.md` only when their
+repositories are actually present.
 
 Both write candidates as `unverified` and hand them to `review`: a model
 proposes, a person disposes. That human decision is the strongest verification

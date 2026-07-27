@@ -129,3 +129,56 @@ describe("federated recall", () => {
     await empty.cleanup();
   });
 });
+
+describe("workspace context: what the neighbours know about here", () => {
+  it("surfaces a neighbour's xgit memory pointing into this repo", async () => {
+    // The workspace now includes the LOCAL repo as a member — which must be
+    // a real git checkout for the resolver to accept it.
+    const { execa } = await import("execa");
+    await execa("git", ["init", "--initial-branch=main"], { cwd: root });
+    const { writeFile: wf } = await import("node:fs/promises");
+    const manifest = join(process.env["MEMBOOK_HOME"]!, "ws.yaml");
+    await wf(
+      manifest,
+      `workspace: ctx\nmembers:\n  consumer:\n    path: ${root}\n  gateway:\n    path: ${
+        gateway().root
+      }\n`,
+      "utf8"
+    );
+    const body = "The consumer retries idempotently against our rate limits.";
+    await new MemoryStore(repoPaths(gateway().root)).write(
+      {
+        ...memoryFor({ body, paths: ["config/limits.yaml"] }).frontmatter,
+        anchors: [
+          {
+            kind: "xgit",
+            repo: "consumer",
+            path: "src/client.ts",
+            commit: "a".repeat(40),
+          },
+        ],
+      },
+      body
+    );
+
+    const { resolveWorkspaceFile } = await import("./workspace.js");
+    const { workspaceContext } = await import("./federated-recall.js");
+    const resolved = await resolveWorkspaceFile(manifest);
+    const context = await workspaceContext(root, resolved);
+
+    expect(context.selfMember).toBe("consumer");
+    expect(context.entries).toHaveLength(1);
+    expect(context.entries[0]).toMatchObject({
+      member: "gateway",
+      path: "src/client.ts",
+    });
+    expect(context.entries[0]!.body).toContain("retries idempotently");
+  });
+
+  it("returns nothing when this repo is not a workspace member", async () => {
+    const { workspaceContext } = await import("./federated-recall.js");
+    const context = await workspaceContext(root, workspace);
+    expect(context.selfMember).toBeUndefined();
+    expect(context.entries).toHaveLength(0);
+  });
+});
