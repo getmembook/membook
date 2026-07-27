@@ -1,5 +1,5 @@
 import { writeFile } from "node:fs/promises";
-import type { Memory, MemoryStatus, MemoryType } from "@membook/spec";
+import type { AnchoredMemory, MemoryStatus, MemoryType } from "@membook/spec";
 import type { MemoryStore, StoredMemory } from "./store.js";
 import type { RepoPaths } from "./paths.js";
 import type { ResolvedWorkspace } from "./workspace.js";
@@ -100,7 +100,7 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / BOOK.charsPerToken);
 }
 
-function recencyFactor(memory: Memory, now: Date): number {
+function recencyFactor(memory: AnchoredMemory, now: Date): number {
   const stamp = memory.verified ?? memory.created;
   const then = Date.parse(stamp);
   if (Number.isNaN(then)) return 0;
@@ -109,7 +109,7 @@ function recencyFactor(memory: Memory, now: Date): number {
 }
 
 /** Expected value of carrying this memory, before its cost is considered. */
-export function expectedValue(memory: Memory, now: Date): number {
+export function expectedValue(memory: AnchoredMemory, now: Date): number {
   const status = BOOK.statusWeight[memory.status];
   if (status === 0) return 0;
   const type = BOOK.typeWeight[memory.type];
@@ -251,7 +251,7 @@ export async function compileBook(
    * is — and counted separately, because "not trusted" and "not checkable
    * here" teach the reader opposite lessons.
    */
-  const isUnresolvableHere = (fm: Memory): boolean =>
+  const isUnresolvableHere = (fm: AnchoredMemory): boolean =>
     fm.anchors.some((a) => a.kind === "xgit" && !usableMembers.has(a.repo));
 
   let excluded = 0;

@@ -1,6 +1,7 @@
 import {
   Membook,
   RANKING,
+  UserStore,
   queryTerms,
   type RecallHit,
 } from "@membook/core";
@@ -62,6 +63,10 @@ async function readStdin(): Promise<string> {
 }
 
 function renderHit(hit: RecallHit): string {
+  // The human's own preference: no anchors to cite, labeled as theirs.
+  if (hit.scope === "user") {
+    return `- [${hit.type} · user preference] ${hit.body}`;
+  }
   const anchors = hit.anchors
     .map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path))
     .join(", ");
@@ -98,7 +103,12 @@ export async function hookPrompt(options: HookOptions): Promise<void> {
     if (prompt.trim().length < MIN_QUERY_CHARS) return;
     if (queryTerms(prompt).length < MIN_QUERY_TERMS) return;
 
-    const membook = new Membook(options.root, { instrumentation: true });
+    const membook = new Membook(options.root, {
+      instrumentation: true,
+      // Preferences join the injection too — "prefer pnpm" is exactly the
+      // kind of thing worth saying before an agent reaches for npm.
+      userStore: new UserStore(),
+    });
     const { hits } = await membook.recall(prompt, {
       // Stale memories are never injected. Unrequested context has to be
       // trustworthy or it is worse than absent — the agent cannot tell where

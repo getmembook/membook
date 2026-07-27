@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   computeMemoryId,
+  type AnchoredMemoryInput,
   type MemoryInput,
   type XgitAnchor,
 } from "@membook/spec";
@@ -43,7 +44,7 @@ afterEach(async () => {
 });
 
 async function rememberContract(
-  status: MemoryInput["status"] = "verified"
+  status: AnchoredMemoryInput["status"] = "verified"
 ): Promise<string> {
   const localBase = await consumer.commitFile(
     "src/client.ts",

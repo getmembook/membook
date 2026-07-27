@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readdir } from "node:fs/promises";
-import { computeMemoryId, type MemoryInput } from "@membook/spec";
+import { computeMemoryId, type MemoryInput,
+  type AnchoredMemoryInput,
+} from "@membook/spec";
 import { MemoryStore } from "./store.js";
 import { repoPaths } from "./paths.js";
 import { WriteBlockedError } from "./errors.js";
@@ -26,7 +28,7 @@ afterEach(async () => {
 
 const COMMIT = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
 
-function memoryFor(body: string): MemoryInput {
+function memoryFor(body: string): AnchoredMemoryInput {
   return {
     memfile: 2,
     id: computeMemoryId(body),

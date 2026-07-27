@@ -229,35 +229,54 @@ export const isoTimestamp = z.union([
   z.date().transform(toCanonicalTimestamp),
 ]);
 
+const memfileVersion = z.literal(MEMFILE_SPEC_VERSION, {
+  error: `memfile must be the spec version literal ${MEMFILE_SPEC_VERSION}`,
+});
+
 /**
- * The machine layer of a Memfile: everything in the YAML frontmatter.
- * The human statement lives in the markdown body, outside this schema.
+ * THE SCOPE DISCRIMINATION (v0.2 §8, ruled).
+ *
+ * An anchor is what makes a memory a checkable claim about the world. A user
+ * preference is not a claim about the world — it is testimony about the
+ * human, and verification is a category error against it, not a pending
+ * obligation. So the schema splits on `scope`, exactly as provenance splits
+ * on `origin` and `author`:
+ *
+ *   repo | team — anchors REQUIRED (min 1), full verification lifecycle
+ *   user        — anchors FORBIDDEN; `status` and `verified` absent from
+ *                 the shape, because a field implying a pending check must
+ *                 not exist on a memory that can never be checked
+ *
+ * Anchors are forbidden rather than optional on purpose: if you have a file
+ * to point at, it is not a preference — it is repo knowledge wearing the
+ * wrong scope.
  */
-const memoryObject = z
+const anchoredMemoryObject = z
   .object({
-    memfile: z.literal(MEMFILE_SPEC_VERSION, {
-      error: `memfile must be the spec version literal ${MEMFILE_SPEC_VERSION}`,
-    }),
+    memfile: memfileVersion,
     id: memoryIdSchema,
     type: z.enum(MEMORY_TYPES),
     status: z.enum(MEMORY_STATUSES),
-    /**
-     * `user` is named in MEMORY_SCOPES but rejected here on purpose: it is
-     * RESERVED until the user store lands (v0.2 §8, ruled), where it becomes
-     * a discriminated variant that FORBIDS anchors. Accepting it early would
-     * put files in the world shaped like repo memories wearing the wrong
-     * scope — files the ruled shape would then have to break.
-     */
-    scope: z.enum(["repo", "team"], {
-      error:
-        "scope must be repo or team — `user` is reserved until the user store lands",
-    }),
+    scope: z.enum(["repo", "team"]),
     confidence: z.number().min(0).max(1),
     created: isoTimestampString,
     verified: isoTimestampString.optional(),
     anchors: z
       .array(anchorSchema)
       .min(1, "a memory must carry at least one anchor"),
+    provenance: provenanceSchema,
+    supersedes: memoryIdSchema.optional(),
+  })
+  .strict();
+
+const userMemoryObject = z
+  .object({
+    memfile: memfileVersion,
+    id: memoryIdSchema,
+    type: z.enum(MEMORY_TYPES),
+    scope: z.literal("user"),
+    confidence: z.number().min(0).max(1),
+    created: isoTimestampString,
     provenance: provenanceSchema,
     supersedes: memoryIdSchema.optional(),
   })
@@ -284,6 +303,20 @@ export const verifiedTimestampIssue = {
 };
 
 /**
+ * The union refinement: the verified-timestamp rule applies exactly where a
+ * verified status can exist. A user memory passes vacuously — not because
+ * the rule is relaxed for it, but because the fields the rule is about are
+ * absent from its shape.
+ */
+const requireVerifiedTimestampAcrossScopes = (m: {
+  scope: string;
+  status?: string;
+  verified?: string | undefined;
+}) =>
+  m.scope === "user" ||
+  requireVerifiedTimestamp(m as { status: string; verified?: string });
+
+/**
  * THE WIRE SCHEMA IS THE MEMFILE STANDARD.
  *
  * Timestamps are strings, and this is what `memoryJsonSchema` projects — so
@@ -293,21 +326,23 @@ export const verifiedTimestampIssue = {
  * A tool that emits real YAML timestamps is NOT spec-compliant, however
  * forgiving our own reader happens to be.
  */
-export const memoryWireSchema = memoryObject.refine(
-  requireVerifiedTimestamp,
-  verifiedTimestampIssue
-);
+export const memoryWireSchema = z
+  .discriminatedUnion("scope", [anchoredMemoryObject, userMemoryObject])
+  .refine(requireVerifiedTimestampAcrossScopes, verifiedTimestampIssue);
 
 /**
  * File form: the standard, plus this implementation's read-side tolerance for
  * YAML-coerced Dates. Never use it to validate a write.
  */
-export const memorySchema = memoryObject
-  .extend({
-    created: isoTimestamp,
-    verified: isoTimestamp.optional(),
-  })
-  .refine(requireVerifiedTimestamp, verifiedTimestampIssue);
+export const memorySchema = z
+  .discriminatedUnion("scope", [
+    anchoredMemoryObject.extend({
+      created: isoTimestamp,
+      verified: isoTimestamp.optional(),
+    }),
+    userMemoryObject.extend({ created: isoTimestamp }),
+  ])
+  .refine(requireVerifiedTimestampAcrossScopes, verifiedTimestampIssue);
 
 export type MemoryType = (typeof MEMORY_TYPES)[number];
 export type MemoryStatus = (typeof MEMORY_STATUSES)[number];
@@ -327,6 +362,10 @@ export type HumanAuthoredProvenance = z.infer<
   typeof humanAuthoredProvenanceSchema
 >;
 export type Memory = z.infer<typeof memorySchema>;
+/** The repo/team variant: at least one anchor, full verification lifecycle. */
+export type AnchoredMemory = Extract<Memory, { scope: "repo" | "team" }>;
+/** The user variant: testimony about the human — no anchors, no lifecycle. */
+export type UserMemory = Extract<Memory, { scope: "user" }>;
 
 /**
  * Frontmatter as accepted on WRITE — the standard's input surface. Anchor
@@ -337,3 +376,7 @@ export type MemoryInput = z.input<typeof memoryWireSchema>;
 
 /** Frontmatter as accepted on READ, which additionally tolerates Dates. */
 export type MemoryFileInput = z.input<typeof memorySchema>;
+
+/** The input variants, split the way the scope discrimination splits them. */
+export type AnchoredMemoryInput = Extract<MemoryInput, { anchors: unknown }>;
+export type UserMemoryInput = Exclude<MemoryInput, { anchors: unknown }>;

@@ -1,4 +1,4 @@
-import type { MemoryStatus, MemoryType } from "@membook/spec";
+import type { MemoryScope, MemoryStatus, MemoryType } from "@membook/spec";
 import type { IndexDb } from "./index-db.js";
 import { toMatchQuery, type MatchMode } from "./search.js";
 
@@ -275,7 +275,9 @@ export interface RecallHit {
   id: string;
   file: string;
   type: MemoryType;
-  status: MemoryStatus;
+  /** Null for user-scope memories: no lifecycle exists to report. */
+  status: MemoryStatus | null;
+  scope: MemoryScope;
   confidence: number;
   body: string;
   anchors: RecallAnchor[];
@@ -360,7 +362,8 @@ interface Row {
   id: string;
   file: string;
   type: MemoryType;
-  status: MemoryStatus;
+  status: MemoryStatus | null;
+  scope: MemoryScope;
   confidence: number;
   body: string;
   created: string;
@@ -396,7 +399,7 @@ export function recall(
   // Over-fetch so re-ranking has candidates to promote, then cap after.
   const rows = db
     .prepare(
-      `SELECT m.id, m.file, m.type, m.status, m.confidence, m.body,
+      `SELECT m.id, m.file, m.type, m.status, m.scope, m.confidence, m.body,
               m.created, m.verified, bm25(memories_fts) AS rank
        FROM memories_fts
        JOIN memories m ON m.rowid = memories_fts.rowid
@@ -421,7 +424,9 @@ export function recall(
   const terms = queryTerms(query);
   const scored: RecallHit[] = [];
   for (const row of rows) {
-    if (!eligible.includes(row.status)) {
+    // User-scope rows have no status to gate on: recall serves them plainly
+    // (v0.2 §8) — relevance still gates, like everything else.
+    if (row.status !== null && !eligible.includes(row.status)) {
       withheld.byStatus[row.status] = (withheld.byStatus[row.status] ?? 0) + 1;
       continue;
     }
@@ -451,7 +456,11 @@ export function recall(
         )
       : 0;
     const recency = recencyScore(row.verified ?? row.created, now);
-    const statusWeight = RANKING.statusWeight[row.status];
+    // A user memory carries no verification signal either way; weighting it
+    // below verified would claim a doubt nobody holds, above would claim a
+    // check nobody ran. Full weight, gated by relevance alone.
+    const statusWeight =
+      row.status === null ? 1 : RANKING.statusWeight[row.status];
 
     const score =
       relevance *
@@ -465,6 +474,7 @@ export function recall(
       file: row.file,
       type: row.type,
       status: row.status,
+      scope: row.scope,
       confidence: row.confidence,
       body: row.body,
       anchors: anchors.map((a) => ({

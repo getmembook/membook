@@ -22,6 +22,7 @@ import {
   type MigrateReport,
 } from "./migrate.js";
 import type { ResolvedWorkspace } from "./workspace.js";
+import type { UserStore } from "./user-store.js";
 import { scanForSecrets } from "./secret-scan.js";
 import { WriteBlockedError, type QuarantineRecord } from "./errors.js";
 import {
@@ -36,6 +37,12 @@ export interface MembookOptions extends MemoryStoreOptions {
    * not the default a local-first tool should ship.
    */
   instrumentation?: Instrumentation | boolean;
+  /**
+   * The human's own store (v0.2 §8), folded into every recall when present.
+   * Opt-in at construction: surfaces that serve a person (CLI, MCP) attach
+   * it against the real home; the engine itself never reaches for `~`.
+   */
+  userStore?: UserStore;
 }
 
 export interface StatusReport {
@@ -57,11 +64,13 @@ export interface StatusReport {
 export class Membook {
   readonly paths: RepoPaths;
   readonly store: MemoryStore;
+  readonly userStore: UserStore | undefined;
   readonly instrumentation: Instrumentation;
 
   constructor(root: string, options: MembookOptions = {}) {
     this.paths = repoPaths(root);
     this.store = new MemoryStore(this.paths, options);
+    this.userStore = options.userStore;
     this.instrumentation =
       options.instrumentation === true
         ? new FileInstrumentation(this.paths.telemetry)
@@ -220,7 +229,33 @@ export class Membook {
   ): Promise<RecallResult> {
     const db = this.open();
     try {
-      const result = recall(db, query, options);
+      let result = recall(db, query, options);
+
+      // User memories join every recall (v0.2 §8), served plainly: same
+      // relevance gates, merged on score, capped together. Provenance stays
+      // visible — every hit carries its scope.
+      if (this.userStore) {
+        const user = await this.userStore.recall(query, options);
+        const limit = options.limit ?? 8;
+        const hits = [...result.hits, ...user.hits].sort(
+          (a, b) => b.score - a.score || a.id.localeCompare(b.id)
+        );
+        const byStatus = { ...result.withheld.byStatus };
+        for (const [status, n] of Object.entries(user.withheld.byStatus)) {
+          byStatus[status] = (byStatus[status] ?? 0) + n;
+        }
+        result = {
+          hits: hits.slice(0, limit),
+          withheld: {
+            belowFloor:
+              result.withheld.belowFloor +
+              user.withheld.belowFloor +
+              Math.max(0, hits.length - limit),
+            byStatus,
+          },
+        };
+      }
+
       this.instrumentation.record({
         event: "recall",
         // Redacted rather than dropped: the shape of the log stays constant,
@@ -228,6 +263,7 @@ export class Membook {
         query: scanForSecrets(query).length > 0 ? "[redacted]" : query,
         query_terms: query.trim().split(/\s+/).filter(Boolean).length,
         served: result.hits.length,
+        served_user: result.hits.filter((h) => h.scope === "user").length,
         withheld_below_floor: result.withheld.belowFloor,
         withheld_by_status: result.withheld.byStatus,
         top_score: result.hits[0]?.score ?? null,

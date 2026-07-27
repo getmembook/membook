@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { computeMemoryId, type MemoryInput } from "@membook/spec";
+import { computeMemoryId, type MemoryInput,
+  type AnchoredMemoryInput,
+} from "@membook/spec";
 import { Membook } from "./membook.js";
 import { GitFixture } from "./git-fixture.js";
 import type { AnchorRechecker } from "./recheck.js";
@@ -21,7 +23,7 @@ async function remember(
   body: string,
   commit: string,
   paths: string[],
-  status: MemoryInput["status"] = "verified"
+  status: AnchoredMemoryInput["status"] = "verified"
 ): Promise<string> {
   const id = computeMemoryId(body);
   await membook.remember(

@@ -109,7 +109,7 @@ membook init [--hooks]   set up; optionally install a Claude Code recall hook
 membook seed             distill existing docs into candidate memories
 membook distill [file]   turn session notes into candidate memories
 membook recall <query>   see what an agent would be served
-membook remember <text>  record a memory yourself
+membook remember <text>  record a memory (--scope user: follows you, never committed)
 membook status           what is known, and how far to trust it
 membook verify           re-check memories against the current code
 membook review           ratify or delete what a human has not seen

@@ -11,6 +11,7 @@ import {
   Membook,
   OpenAiCompatibleProvider,
   SecretScanGuard,
+  UserStore,
   changesSince,
   defaultWorkspacePath,
   headSha,
@@ -214,7 +215,11 @@ export interface RecallOptions extends CommonOptions {
  */
 export async function recall(options: RecallOptions): Promise<void> {
   const log = out(options);
-  const membook = new Membook(options.root, { instrumentation: true });
+  const membook = new Membook(options.root, {
+    instrumentation: true,
+    // The human's own store joins every recall (v0.2 §8).
+    userStore: new UserStore(),
+  });
 
   const statuses: Array<"verified" | "unverified" | "stale"> = [
     "verified",
@@ -308,15 +313,23 @@ export async function recall(options: RecallOptions): Promise<void> {
   log("");
 
   for (const hit of hits) {
-    log(`${statusLabel(hit.status)}  ${hit.id}  ${dim(hit.type)}`);
-    log(wrap(hit.body, 76, "  "));
+    // A user hit has no lifecycle to label and no anchors to cite — the
+    // scope IS its provenance, and it is said plainly.
     log(
-      dim(
-        `  ${hit.anchors
-          .map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path))
-          .join(", ")}`
-      )
+      `${hit.status === null ? dim("user") : statusLabel(hit.status)}  ${
+        hit.id
+      }  ${dim(hit.type)}`
     );
+    log(wrap(hit.body, 76, "  "));
+    if (hit.anchors.length > 0) {
+      log(
+        dim(
+          `  ${hit.anchors
+            .map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path))
+            .join(", ")}`
+        )
+      );
+    }
     // Shown because a human tuning retrieval needs to see the margin between
     // what was served and what was not.
     log(dim(`  score ${hit.score.toFixed(3)}`));
@@ -666,6 +679,7 @@ export interface RememberOptions extends CommonOptions {
   statement: string;
   type: MemoryType;
   paths: string[];
+  scope?: "repo" | "user";
   symbol?: string;
   confidence?: number;
   now?: () => Date;
@@ -682,6 +696,45 @@ export interface RememberOptions extends CommonOptions {
 export async function remember(options: RememberOptions): Promise<void> {
   const log = out(options);
   const now = options.now ?? (() => new Date());
+
+  if (options.scope === "user") {
+    // A preference follows the human, not a repository: no git required, no
+    // anchors possible. If you have a file to point at, it is not a
+    // preference — it is repo knowledge wearing the wrong scope.
+    if (options.paths.length > 0 || options.symbol !== undefined) {
+      die(
+        "A user-scope memory cannot carry anchors.",
+        "If it is about specific files, it is repo knowledge: record it without --scope user."
+      );
+    }
+    const store = new UserStore(undefined, { guards: [new SecretScanGuard()] });
+    try {
+      const stored = await store.remember({
+        statement: options.statement,
+        type: options.type,
+        ...(options.confidence !== undefined
+          ? { confidence: options.confidence }
+          : {}),
+        now,
+      });
+      log("");
+      log(ok(`Recorded ${stored.id} (${options.type}, user scope).`));
+      log(dim(`  ${stored.path}`));
+      log(
+        dim(
+          "  It follows you, not this repository: recalled in every session, never committed."
+        )
+      );
+      log("");
+    } catch (error) {
+      log("");
+      log(bad("Not recorded."));
+      log(wrap((error as Error).message, 76, "  "));
+      log("");
+      process.exitCode = 1;
+    }
+    return;
+  }
 
   if (!(await isGitRepository(options.root))) {
     die(

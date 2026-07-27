@@ -33,6 +33,8 @@ export interface RecallEvent {
   query: string;
   query_terms: number;
   served: number;
+  /** How many served hits came from the human's own store. */
+  served_user: number;
   withheld_below_floor: number;
   withheld_by_status: Record<string, number>;
   top_score: number | null;

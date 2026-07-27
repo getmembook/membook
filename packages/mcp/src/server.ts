@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { z } from "zod";
 import {
   Membook,
+  UserStore,
   headSha,
   findMissingAnchorPaths,
   isGitRepository,
@@ -11,7 +12,12 @@ import {
   type WriteGuard,
   type Instrumentation,
 } from "@membook/core";
-import { MEMFILE_SPEC_VERSION, MEMORY_TYPES, computeMemoryId, type MemoryInput } from "@membook/spec";
+import {
+  MEMFILE_SPEC_VERSION,
+  MEMORY_TYPES,
+  computeMemoryId,
+  type MemoryInput,
+} from "@membook/spec";
 
 export const SERVER_NAME = "membook";
 // Runtime read, not a constant: the hardcoded predecessor shipped 0.1.1
@@ -44,6 +50,12 @@ export interface CreateServerOptions {
 }
 
 function renderHit(hit: RecallHit): string {
+  // A user-scope hit is the human's own testimony: no anchors to cite, no
+  // lifecycle to flag — and the label says whose knowledge it is, so an
+  // agent can tell a personal preference from a repository fact.
+  if (hit.scope === "user") {
+    return [`[${hit.type} · user preference] ${hit.id}`, hit.body].join("\n");
+  }
   const anchors = hit.anchors
     .map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path))
     .join(", ");
@@ -78,6 +90,9 @@ export function createServer(options: CreateServerOptions): McpServer {
   const membook = new Membook(root, {
     guards: options.guards ?? [new SecretScanGuard()],
     instrumentation: options.instrumentation ?? true,
+    // The human's own store joins every recall (v0.2 §8). Reading an absent
+    // store is a no-op, so this costs nothing until preferences exist.
+    userStore: new UserStore(),
   });
 
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });

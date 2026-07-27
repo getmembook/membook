@@ -218,6 +218,26 @@ const examples: Example[] = [
       },
     },
   },
+  {
+    body: [
+      "Prefer explicit return types on exported functions; inference is fine",
+      "inside module bodies.",
+    ].join("\n"),
+    // A user-scope memory is testimony about the human, not a claim about
+    // the world: no anchors (forbidden, not optional), and no status or
+    // verified fields — a check can never be pending against it.
+    frontmatter: {
+      memfile: 2,
+      type: "convention",
+      scope: "user",
+      confidence: 0.9,
+      created: "2026-07-26T09:00:00Z",
+      provenance: {
+        origin: "authored",
+        author: "human",
+      },
+    },
+  },
 ];
 
 mkdirSync(EXAMPLES_DIR, { recursive: true });

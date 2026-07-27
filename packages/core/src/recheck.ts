@@ -1,4 +1,4 @@
-import type { Anchor, Memory } from "@membook/spec";
+import type { Anchor, AnchoredMemory } from "@membook/spec";
 import type { PathChange } from "./git.js";
 
 /** An anchor whose file changed, with what git says happened to it. */
@@ -8,7 +8,8 @@ export interface TouchedAnchor {
 }
 
 export interface RecheckRequest {
-  memory: Memory;
+  /** Only anchored memories are ever re-checked: a check needs an anchor. */
+  memory: AnchoredMemory;
   body: string;
   touched: TouchedAnchor[];
 }

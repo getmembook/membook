@@ -60,6 +60,9 @@ async function readEvents(
 beforeEach(async () => {
   lines = [];
   root = await mkdtemp(join(tmpdir(), "membook-cli-"));
+  // Hermetic user store: commands attach ~/.membook/store by default, and a
+  // developer's real preferences must never leak into assertions.
+  process.env["MEMBOOK_HOME"] = await mkdtemp(join(tmpdir(), "membook-hm-"));
   await git(root, ["init", "--initial-branch=main"]);
   await git(root, ["config", "user.name", "Fixture"]);
   await git(root, ["config", "user.email", "fixture@example.test"]);
@@ -72,6 +75,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
+  const home = process.env["MEMBOOK_HOME"];
+  delete process.env["MEMBOOK_HOME"];
+  if (home) await rm(home, { recursive: true, force: true });
 });
 
 describe("init", () => {
@@ -1852,5 +1858,68 @@ describe("verify --workspace", () => {
     expect(flat()).toContain("membook verify --workspace");
     await rm(producerDir, { recursive: true, force: true });
     await rm(manifest, { force: true });
+  });
+});
+
+describe("remember --scope user", () => {
+  it("records a preference outside any repository", async () => {
+    await remember({
+      root,
+      statement: "Prefer pnpm over npm for every JavaScript project.",
+      type: "convention",
+      paths: [],
+      scope: "user",
+      log,
+    });
+    expect(flat()).toContain("user scope");
+    expect(flat()).toContain("never committed");
+
+    const { readdir } = await import("node:fs/promises");
+    const storeDir = join(process.env["MEMBOOK_HOME"]!, ".membook/store");
+    const files = await readdir(storeDir);
+    expect(files).toHaveLength(1);
+    const text = await readFile(join(storeDir, files[0]!), "utf8");
+    expect(text).toContain("scope: user");
+    expect(text).not.toContain("anchors:");
+  });
+
+  it("recall serves the preference alongside repo memories, labeled", async () => {
+    await init({ root, log });
+    await remember({
+      root,
+      statement: "Prefer pnpm over npm for every JavaScript project.",
+      type: "convention",
+      paths: [],
+      scope: "user",
+      log,
+    });
+    lines = [];
+    await recall({ root, query: "pnpm or npm for this project", log });
+    expect(flat()).toContain("pnpm over npm");
+    expect(flat()).toContain("user");
+  });
+
+  // die() exits the process, so the refusal is proven through the binary.
+  const bin = join(import.meta.dirname, "..", "dist", "cli.js");
+  const runIf = existsSync(bin) ? it : it.skip;
+  runIf("refuses anchors on a preference, with directions", async () => {
+    const result = await execa(
+      "node",
+      [
+        bin,
+        "-C",
+        root,
+        "remember",
+        "Prefer pnpm.",
+        "--scope",
+        "user",
+        "-p",
+        "src/auth.ts",
+      ],
+      { reject: false, env: { MEMBOOK_HOME: process.env["MEMBOOK_HOME"]! } }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toMatch(/cannot carry anchors/);
+    expect(result.stderr).toMatch(/repo knowledge/);
   });
 });
