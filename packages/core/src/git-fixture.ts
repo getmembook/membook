@@ -2,6 +2,7 @@ import { execa } from "execa";
 import { mkdtemp, rm, writeFile, mkdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { resolveWorkspaceFile, type ResolvedWorkspace } from "./workspace.js";
 
 /**
  * Helpers for spawning throwaway git repositories the verify tests can
@@ -106,4 +107,46 @@ export class GitFixture {
   async cleanup(): Promise<void> {
     await rm(this.root, { recursive: true, force: true });
   }
+}
+
+export interface WorkspaceFixture {
+  /** One throwaway repo per member name. */
+  members: Record<string, GitFixture>;
+  /** A real manifest on disk pointing at them, absolute paths. */
+  manifestPath: string;
+  resolved(): Promise<ResolvedWorkspace>;
+  cleanup(): Promise<void>;
+}
+
+/**
+ * Spawn N temp repos plus a manifest naming them — the multi-repo sibling of
+ * `GitFixture`, for asserting cross-repo verification against real git
+ * behaviour end to end: real checkouts, a real manifest file, the real
+ * resolver.
+ */
+export async function workspaceFixture(
+  names: string[]
+): Promise<WorkspaceFixture> {
+  const members: Record<string, GitFixture> = {};
+  for (const name of names) {
+    members[name] = await GitFixture.create();
+  }
+
+  const manifestDir = await mkdtemp(join(tmpdir(), "membook-manifest-"));
+  const manifestPath = join(manifestDir, "workspace.yaml");
+  const lines = ["workspace: fixture", "members:"];
+  for (const name of names) {
+    lines.push(`  ${name}:`, `    path: ${members[name]!.root}`);
+  }
+  await writeFile(manifestPath, `${lines.join("\n")}\n`, "utf8");
+
+  return {
+    members,
+    manifestPath,
+    resolved: () => resolveWorkspaceFile(manifestPath),
+    cleanup: async () => {
+      for (const fixture of Object.values(members)) await fixture.cleanup();
+      await rm(manifestDir, { recursive: true, force: true });
+    },
+  };
 }

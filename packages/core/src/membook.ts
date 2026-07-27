@@ -21,6 +21,7 @@ import {
   type MigrateOptions,
   type MigrateReport,
 } from "./migrate.js";
+import type { ResolvedWorkspace } from "./workspace.js";
 import { scanForSecrets } from "./secret-scan.js";
 import { WriteBlockedError, type QuarantineRecord } from "./errors.js";
 import {
@@ -259,7 +260,11 @@ export class Membook {
         from: v.from,
         to: v.to,
         rechecked: v.rechecked,
-        outcomes: v.outcomes.map((o) => o.kind),
+        // Cross-repo outcomes carry their member (`modified@gateway`), so
+        // accuracy stays attributable per repository.
+        outcomes: v.outcomes.map((o) =>
+          o.member ? `${o.kind}@${o.member}` : o.kind
+        ),
       });
     }
     if (!report.dryRun && report.changed.length > 0) await this.reindex();
@@ -267,18 +272,23 @@ export class Membook {
   }
 
   /** Compile the boot pack without writing it. */
-  async compileBook(options: { now?: Date } = {}): Promise<BookReport> {
+  async compileBook(
+    options: { now?: Date; workspace?: ResolvedWorkspace } = {}
+  ): Promise<BookReport> {
     return compileBook(this.store, options);
   }
 
   /** Compile the boot pack and write `MEMBOOK.md`. */
-  async writeBook(options: { now?: Date } = {}): Promise<BookReport> {
+  async writeBook(
+    options: { now?: Date; workspace?: ResolvedWorkspace } = {}
+  ): Promise<BookReport> {
     const report = await writeBook(this.paths, this.store, options);
     this.instrumentation.record({
       event: "book",
       carried: report.entries.length,
       omitted: report.omitted,
       excluded: report.excluded,
+      excluded_unresolvable: report.excludedUnresolvable,
       tokens: report.tokens,
     });
     return report;

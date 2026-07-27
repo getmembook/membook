@@ -455,12 +455,11 @@ describe("the signature demo", () => {
   });
 });
 
-describe("cross-repo anchors, before workspace verification exists", () => {
-  // Verifying only the local anchors of a memory that also reaches into
-  // another repository would report partial coverage as a full verdict —
-  // the lie-by-aggregation the pass exists to prevent. Until step 3 lands,
-  // such memories are left exactly as they are, and say why.
-  it("leaves an xgit-anchored memory untouched, with the reason spelled out", async () => {
+describe("cross-repo anchors, without a workspace", () => {
+  // An unresolvable member blocks confirmation, never conviction: the local
+  // anchor's drift is evidence the pass actually saw, so the memory goes
+  // honestly stale even though the cross-repo half could not be checked.
+  it("lets local drift convict while the member stays unresolvable", async () => {
     const base = await repo.commitFile("src/auth.ts", "export const a = 1;\n");
     const body = "The gateway limits config is the contract we consume.";
     const id = computeMemoryId(body);
@@ -486,20 +485,19 @@ describe("cross-repo anchors, before workspace verification exists", () => {
       },
       body
     );
-    const before = (await membook.store.read(id)).text;
-
-    // Touch the local anchor so a naive pass would have re-checked it.
+    // Touch the local anchor: the conservative re-checker will demote.
     await repo.edit("src/auth.ts", "export const a = 2;\n");
     const report = await membook.verify();
 
-    expect(await statusOf(id)).toBe("unverified");
-    expect((await membook.store.read(id)).text).toBe(before);
-    const verdict = [...report.changed, ...report.unchanged].find(
-      (v) => v.id === id
-    )!;
-    expect(verdict.to).toBe(verdict.from);
-    expect(verdict.rechecked).toBe(false);
-    expect(verdict.reason).toMatch(/cross-repo/);
-    expect(verdict.reason).toMatch(/cannot check yet/);
+    expect(await statusOf(id)).toBe("stale");
+    const verdict = report.changed.find((v) => v.id === id)!;
+    expect(verdict.rechecked).toBe(true);
+    expect(verdict.outcomes.map((o) => [o.kind, o.member ?? null])).toEqual([
+      ["modified", null],
+      ["unresolvable", "platform-gateway"],
+    ]);
+    expect(
+      verdict.outcomes.find((o) => o.kind === "unresolvable")!.reason
+    ).toMatch(/no workspace manifest/);
   });
 });

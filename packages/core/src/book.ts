@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import type { Memory, MemoryStatus, MemoryType } from "@membook/spec";
 import type { MemoryStore, StoredMemory } from "./store.js";
 import type { RepoPaths } from "./paths.js";
+import type { ResolvedWorkspace } from "./workspace.js";
 
 /**
  * THE COMPILED BOOK.
@@ -86,6 +87,13 @@ export interface BookReport {
   omitted: number;
   /** Excluded by status: stale or invalidated. */
   excluded: number;
+  /**
+   * Excluded because a cross-repo anchor's member is not usable on this
+   * machine (or no workspace was provided at all). Never folded into
+   * `excluded`: "no longer trusted" and "not checkable here" are different
+   * facts, and the header reports them as different sentences.
+   */
+  excludedUnresolvable: number;
 }
 
 export function estimateTokens(text: string): number {
@@ -148,8 +156,9 @@ function header(generated: {
   count: number;
   omitted: number;
   excluded: number;
+  excludedUnresolvable: number;
 }): string {
-  const { count, omitted, excluded } = generated;
+  const { count, omitted, excluded, excludedUnresolvable } = generated;
 
   // "Omitted for space" and "withheld because it drifted" are different facts
   // and must never be blurred into one count. A reader told "the 1 best of 4"
@@ -177,6 +186,19 @@ function header(generated: {
         "it describes has",
         "they describe has"
       )} changed since ${pick(excluded, "it was", "they were")} last checked.`
+    );
+  }
+  if (excludedUnresolvable > 0) {
+    sentences.push(
+      `${excludedUnresolvable} further ${pick(
+        excludedUnresolvable,
+        "memory",
+        "memories"
+      )} could not be checked on this machine because the ${pick(
+        excludedUnresolvable,
+        "repository it describes is",
+        "repositories they describe are"
+      )} not present.`
     );
   }
   sentences.push(
@@ -213,16 +235,35 @@ function header(generated: {
  */
 export async function compileBook(
   store: MemoryStore,
-  options: { now?: Date } = {}
+  options: { now?: Date; workspace?: ResolvedWorkspace } = {}
 ): Promise<BookReport> {
   const now = options.now ?? new Date();
   const { memories } = await store.readAll();
 
+  const usableMembers = new Set(
+    (options.workspace?.members ?? [])
+      .filter((m) => m.state === "resolved")
+      .map((m) => m.name)
+  );
+  /**
+   * The book is asserted as fact with no chance to caveat, so a memory whose
+   * cross-repo anchor this machine cannot resolve is withheld the way stale
+   * is — and counted separately, because "not trusted" and "not checkable
+   * here" teach the reader opposite lessons.
+   */
+  const isUnresolvableHere = (fm: Memory): boolean =>
+    fm.anchors.some((a) => a.kind === "xgit" && !usableMembers.has(a.repo));
+
   let excluded = 0;
+  let excludedUnresolvable = 0;
   const candidates: BookEntry[] = [];
 
   for (const memory of memories) {
     const fm = memory.memfile.frontmatter;
+    if (isUnresolvableHere(fm)) {
+      excludedUnresolvable += 1;
+      continue;
+    }
     const value = expectedValue(fm, now);
     if (value === 0) {
       excluded += 1;
@@ -253,7 +294,12 @@ export async function compileBook(
   // Budget the header pessimistically: assume every candidate is carried, so
   // the reserved size cannot come out smaller than the header finally emitted.
   const headerTokens = estimateTokens(
-    header({ count: candidates.length, omitted: candidates.length, excluded })
+    header({
+      count: candidates.length,
+      omitted: candidates.length,
+      excluded,
+      excludedUnresolvable,
+    })
   );
   const selected: BookEntry[] = [];
   let used = headerTokens;
@@ -272,11 +318,17 @@ export async function compileBook(
 
   const content =
     selected.length === 0
-      ? `${header({ count: 0, omitted, excluded })}\n\nNo memories yet.\n`
+      ? `${header({
+          count: 0,
+          omitted,
+          excluded,
+          excludedUnresolvable,
+        })}\n\nNo memories yet.\n`
       : `${header({
           count: selected.length,
           omitted,
           excluded,
+          excludedUnresolvable,
         })}\n\n${selected.map(renderEntry).join("\n\n")}\n`;
 
   return {
@@ -285,6 +337,7 @@ export async function compileBook(
     tokens: estimateTokens(content),
     omitted,
     excluded,
+    excludedUnresolvable,
   };
 }
 
@@ -292,10 +345,9 @@ export async function compileBook(
 export async function writeBook(
   paths: RepoPaths,
   store: MemoryStore,
-  options: { now?: Date } = {}
+  options: { now?: Date; workspace?: ResolvedWorkspace } = {}
 ): Promise<BookReport> {
   const report = await compileBook(store, options);
   await writeFile(paths.book, report.content, "utf8");
   return report;
 }
-
