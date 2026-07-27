@@ -7,7 +7,10 @@ import {
   headSha,
   findMissingAnchorPaths,
   isGitRepository,
+  resolveWorkspaceFile,
+  workspaceContext,
   type RecallHit,
+  type ResolvedWorkspace,
   SecretScanGuard,
   type WriteGuard,
   type Instrumentation,
@@ -45,6 +48,14 @@ export interface CreateServerOptions {
   guards?: readonly WriteGuard[];
   /** Local event log. Defaults to on; never leaves the machine. */
   instrumentation?: Instrumentation | boolean;
+  /**
+   * Workspace manifest path, for cross-repo anchors (set via
+   * MEMBOOK_WORKSPACE when spawned by a harness). Resolved lazily per call:
+   * checkouts appear and disappear between tool calls, and a manifest that
+   * cannot be used degrades to unresolvable anchors with the reason named,
+   * never to a dead server.
+   */
+  workspaceManifest?: string;
   /** Injected for deterministic tests. */
   now?: () => Date;
 }
@@ -56,6 +67,8 @@ function renderHit(hit: RecallHit): string {
   if (hit.scope === "user") {
     return [`[${hit.type} · user preference] ${hit.id}`, hit.body].join("\n");
   }
+  // A neighbour's testimony wears its origin: `[gotcha · from gateway]`.
+  const origin = hit.member !== undefined ? ` · from ${hit.member}` : "";
   const anchors = hit.anchors
     .map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path))
     .join(", ");
@@ -69,7 +82,7 @@ function renderHit(hit: RecallHit): string {
       ? " (unverified)"
       : "";
   return [
-    `[${hit.type}${flag}] ${hit.id}`,
+    `[${hit.type}${flag}${origin}] ${hit.id}`,
     hit.body,
     `anchors: ${anchors}`,
   ].join("\n");
@@ -94,6 +107,15 @@ export function createServer(options: CreateServerOptions): McpServer {
     // store is a no-op, so this costs nothing until preferences exist.
     userStore: new UserStore(),
   });
+
+  const workspace = async (): Promise<ResolvedWorkspace | undefined> => {
+    if (!options.workspaceManifest) return undefined;
+    try {
+      return await resolveWorkspaceFile(options.workspaceManifest);
+    } catch {
+      return undefined;
+    }
+  };
 
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
@@ -140,10 +162,12 @@ export function createServer(options: CreateServerOptions): McpServer {
       if (include_unverified !== false) statuses.push("unverified");
       if (include_stale === true) statuses.push("stale");
 
+      const ws = await workspace();
       const { hits, withheld } = await membook.recall(query, {
         statuses,
         limit: Math.min(limit ?? MAX_RECALL_HITS, MAX_RECALL_HITS),
         ...(paths?.length ? { contextPaths: paths } : {}),
+        ...(ws ? { workspace: ws } : {}),
         now: now(),
       });
 
@@ -359,12 +383,21 @@ export function createServer(options: CreateServerOptions): McpServer {
 
       const total = status.onDisk;
       if (total === 0) {
+        // An empty local store is exactly when a neighbour's testimony is
+        // most valuable — the workspace context still gets its say.
+        const emptyLines = ["No memories recorded for this repository yet."];
+        const wsEmpty = await workspace();
+        if (wsEmpty) {
+          const context = await workspaceContext(root, wsEmpty);
+          for (const entry of context.entries) {
+            emptyLines.push(
+              `- [${entry.type} · from ${entry.member}, about ${entry.path}] ${entry.body}`
+            );
+          }
+        }
         return {
           content: [
-            {
-              type: "text" as const,
-              text: "No memories recorded for this repository yet.",
-            },
+            { type: "text" as const, text: emptyLines.join("\n") },
           ],
         };
       }
@@ -386,7 +419,11 @@ export function createServer(options: CreateServerOptions): McpServer {
       }
 
       if (verify === true && (await isGitRepository(root))) {
-        const report = await membook.verify({ dryRun: true });
+        const ws = await workspace();
+        const report = await membook.verify({
+          dryRun: true,
+          ...(ws ? { workspace: ws } : {}),
+        });
         const wouldChange = report.changed.length;
         lines.push(
           wouldChange === 0
@@ -403,6 +440,26 @@ export function createServer(options: CreateServerOptions): McpServer {
                   .join(", ") +
                 ". Run `membook verify` to apply."
         );
+      }
+
+      // What the neighbours know about here (v0.2 §7): live, capped, never
+      // committed — testimony from other repositories, labeled as such.
+      const ws2 = await workspace();
+      if (ws2) {
+        const context = await workspaceContext(root, ws2);
+        if (context.entries.length > 0) {
+          lines.push(
+            `Workspace context — what other repositories know about this one:`
+          );
+          for (const entry of context.entries) {
+            lines.push(
+              `- [${entry.type} · from ${entry.member}, about ${entry.path}] ${entry.body}`
+            );
+          }
+          if (context.omitted > 0) {
+            lines.push(`(${context.omitted} more withheld to stay small.)`);
+          }
+        }
       }
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };

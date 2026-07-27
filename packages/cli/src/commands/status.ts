@@ -1,5 +1,11 @@
 import type { MemoryStatus } from "@membook/spec";
-import { Membook, isGitRepository } from "@membook/core";
+import {
+  Membook,
+  behindUpstream,
+  isGitRepository,
+  type MemberResolution,
+} from "@membook/core";
+import { resolveWorkspaceFlag } from "./misc.js";
 import {
   STATUS_MEANING,
   dim,
@@ -15,6 +21,8 @@ export interface StatusOptions {
   root: string;
   /** Also diff anchors against HEAD without writing. */
   check?: boolean;
+  /** Resolve cross-repo anchors via a workspace manifest. */
+  workspace?: string | true;
   log?: (line: string) => void;
 }
 
@@ -38,6 +46,7 @@ export async function status(options: StatusOptions): Promise<void> {
     options.log ?? ((line: string) => process.stdout.write(`${line}\n`));
   const membook = new Membook(options.root);
   const report = await membook.status();
+  const workspace = await resolveWorkspaceFlag(options.workspace);
 
   log("");
 
@@ -214,13 +223,53 @@ export async function status(options: StatusOptions): Promise<void> {
     log("");
   }
 
+  if (workspace) {
+    const usable = workspace.members.filter((m) => m.state === "resolved");
+    log(
+      heading(
+        `Workspace ${workspace.workspace} — ${usable.length} of ${
+          workspace.members.length
+        } ${plural(
+          workspace.members.length,
+          "member",
+          "members"
+        )} usable on this machine`
+      )
+    );
+
+    // Which members this store actually reaches into, so an unresolvable
+    // member is reported with its consequences, not just its absence.
+    const { memories } = await membook.store.readAll();
+    const reach = new Map<string, number>();
+    for (const memory of memories) {
+      for (const anchor of memory.memfile.frontmatter.anchors) {
+        if (anchor.kind === "xgit") {
+          reach.set(anchor.repo, (reach.get(anchor.repo) ?? 0) + 1);
+        }
+      }
+    }
+
+    for (const member of workspace.members) {
+      for (const line of await memberLines(
+        member,
+        reach.get(member.name) ?? 0
+      )) {
+        log(line);
+      }
+    }
+    log("");
+  }
+
   if (options.check) {
     if (!(await isGitRepository(options.root))) {
       log(warn("Not a git repository, so anchors cannot be checked."));
       log("");
       return;
     }
-    const verify = await membook.verify({ dryRun: true });
+    const verify = await membook.verify({
+      dryRun: true,
+      ...(workspace ? { workspace } : {}),
+    });
     if (verify.changed.length === 0) {
       log(
         ok(
@@ -247,4 +296,65 @@ export async function status(options: StatusOptions): Promise<void> {
     }
     log("");
   }
+}
+
+/**
+ * One member, one or two lines. Identity states are spelled out — nothing to
+ * check, checked and passed, and could-not-check are different facts — and a
+ * behind-upstream count is information, not alarm: the checkout verifies
+ * against what was last pulled, which is still the honest "last proven
+ * against" claim.
+ */
+async function memberLines(
+  member: MemberResolution,
+  reaches: number
+): Promise<string[]> {
+  const reachNote =
+    reaches > 0
+      ? `  ${dim(
+          `${reaches} ${plural(reaches, "memory", "memories")} here ${
+            reaches === 1 ? "reaches" : "reach"
+          } into it`
+        )}`
+      : "";
+
+  if (member.state === "resolved") {
+    const identity =
+      member.identity === "confirmed"
+        ? "identity confirmed"
+        : member.identity === "unconfirmed"
+        ? "identity unconfirmed — the checkout has no origin to compare"
+        : "identity undeclared";
+    const behind = await behindUpstream(member.path);
+    const behindNote =
+      behind !== null && behind > 0
+        ? ` — ${behind} ${plural(
+            behind,
+            "commit",
+            "commits"
+          )} behind its upstream, so cross-repo checks see what was last pulled`
+        : "";
+    return [
+      `  ${ok(`${member.name}`)}  ${dim(
+        `${member.path} (${identity})${behindNote}`
+      )}${reachNote}`,
+    ];
+  }
+
+  if (member.state === "remote-mismatch") {
+    return [
+      `  ${warn(member.name)}  ${dim("refused: wrong repository")}${reachNote}`,
+      wrap(member.reason, 76, "     "),
+    ];
+  }
+
+  return [
+    `  ${warn(member.name)}  ${dim(
+      `(unresolvable: ${
+        member.state === "absent"
+          ? `nothing at ${member.path} on this machine`
+          : `${member.path} is not a git repository`
+      })`
+    )}${reachNote}`,
+  ];
 }

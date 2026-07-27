@@ -603,3 +603,37 @@ again; EOF still quits, so piped input cannot spin.
 were obvious within minutes of genuine use, and one of them sat directly on
 the surface that produces the product's only ground-truth labels. The
 annoyance log keeps earning its place as the real backlog.
+
+### 2026-07-27 — the v0.2 acceptance: contract-watch, unrehearsed, on real repositories
+
+**What happened.** The §14 acceptance run, on the real PIQ workspace — two
+production repositories this machine works on daily, not fixtures. A
+manifest at `~/.membook/workspace.yaml` named `piq-backend` and
+`piq-frontend` with their GitHub remotes. A cross-repo memory (`m-c708`) was
+recorded in the frontend: the backend's prescriptions serializer defines the
+dispense-queue payload the Detail page renders — anchored locally to
+`src/features/prescriptions/pages/Detail.tsx` and via `xgit` into
+`piq-backend` at `30a72cb`, a baseline predating the dispensing rework.
+
+**What the machinery did, first try.**
+
+`membook verify --workspace` flipped `m-c708` to `stale`: the serializer had
+genuinely changed in the backend's own history (`61a4b13`, the
+print-and-basket fix) since the anchor's baseline. Real repositories, real
+drift, no rehearsal — the consumer's memory went honest before an agent
+could code against the old payload shape.
+
+`membook status -w` resolved both members with **identity confirmed** — the
+manifest declares SSH remotes, both checkouts use HTTPS origins, and the
+canonical-identity normalization unified them on live GitHub URLs, which is
+the exact false-mismatch the §3 ruling existed to prevent. The stale memory
+is withheld from MEMBOOK.md under its honest sentence.
+
+**What it cost.** One manifest, one `init`, one memory, two commands. The
+backend repository was never written to — its only participation was being
+read.
+
+**Still owed.** The verify flip used the conservative re-checker (no model
+key in the session), so `stale` is the skeptical default rather than a
+model's judgment; a `--recheck` pass and a longer soak under real workflow
+churn remain the evidence the v2 federation thesis actually needs.

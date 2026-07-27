@@ -23,6 +23,7 @@ import {
 } from "./migrate.js";
 import type { ResolvedWorkspace } from "./workspace.js";
 import type { UserStore } from "./user-store.js";
+import { federatedRecall } from "./federated-recall.js";
 import { scanForSecrets } from "./secret-scan.js";
 import { WriteBlockedError, type QuarantineRecord } from "./errors.js";
 import {
@@ -225,11 +226,11 @@ export class Membook {
    */
   async recall(
     query: string,
-    options: RecallOptions = {}
+    options: RecallOptions & { workspace?: ResolvedWorkspace } = {}
   ): Promise<RecallResult> {
     const db = this.open();
     try {
-      let result = recall(db, query, options);
+      let result: RecallResult = recall(db, query, options);
 
       // User memories join every recall (v0.2 §8), served plainly: same
       // relevance gates, merged on score, capped together. Provenance stays
@@ -256,6 +257,12 @@ export class Membook {
         };
       }
 
+      // Workspace mode: fan out across member stores via the read-only
+      // cache, merge ranked, provenance visible (v0.2 §7, §10).
+      if (options.workspace) {
+        result = await federatedRecall(result, options.workspace, query, options);
+      }
+
       this.instrumentation.record({
         event: "recall",
         // Redacted rather than dropped: the shape of the log stays constant,
@@ -264,6 +271,7 @@ export class Membook {
         query_terms: query.trim().split(/\s+/).filter(Boolean).length,
         served: result.hits.length,
         served_user: result.hits.filter((h) => h.scope === "user").length,
+        served_remote: result.hits.filter((h) => h.member !== undefined).length,
         withheld_below_floor: result.withheld.belowFloor,
         withheld_by_status: result.withheld.byStatus,
         top_score: result.hits[0]?.score ?? null,

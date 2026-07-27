@@ -161,6 +161,17 @@ export {
   type TouchedAnchor,
 } from "./recheck.js";
 export {
+  federatedRecall,
+  workspaceCacheDir,
+  CROSS_REPO_WEIGHT,
+  type FederatedRecallResult,
+  type FederatedMemberResult,
+  workspaceContext,
+  WORKSPACE_CONTEXT_MAX,
+  type WorkspaceContextEntry,
+  type WorkspaceContextResult,
+} from "./federated-recall.js";
+export {
   canonicalRemote,
   defaultWorkspacePath,
   resolveWorkspace,
@@ -172,6 +183,7 @@ export {
 export {
   isGitRepository,
   headSha,
+  behindUpstream,
   commitExists,
   originUrl,
   changesSince,

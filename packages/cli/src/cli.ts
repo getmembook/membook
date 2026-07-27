@@ -77,8 +77,16 @@ program
   .command("status")
   .description("what is known, and how far to trust it")
   .option("--check", "also diff anchors against HEAD, without writing")
-  .action(async (opts: { check?: boolean }) => {
-    await status({ root: root(), ...(opts.check ? { check: true } : {}) });
+  .option(
+    "-w, --workspace [manifest]",
+    "report workspace members and resolve cross-repo anchors (default: ~/.membook/workspace.yaml)"
+  )
+  .action(async (opts: { check?: boolean; workspace?: string | true }) => {
+    await status({
+      root: root(),
+      ...(opts.check ? { check: true } : {}),
+      ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
+    });
   });
 
 program
@@ -142,8 +150,15 @@ program
 program
   .command("book")
   .description("regenerate MEMBOOK.md")
-  .action(async () => {
-    await book({ root: root() });
+  .option(
+    "-w, --workspace [manifest]",
+    "resolve cross-repo anchors via a workspace manifest (default: ~/.membook/workspace.yaml)"
+  )
+  .action(async (opts: { workspace?: string | true }) => {
+    await book({
+      root: root(),
+      ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
+    });
   });
 
 program
@@ -197,10 +212,19 @@ program
   )
   .option("--include-stale", "also show memories whose code has drifted")
   .option("-n, --limit <n>", "maximum memories to show", "8")
+  .option(
+    "-w, --workspace [manifest]",
+    "also search workspace members' memories (default: ~/.membook/workspace.yaml)"
+  )
   .action(
     async (
       query: string,
-      opts: { path?: string[]; includeStale?: boolean; limit: string }
+      opts: {
+        path?: string[];
+        includeStale?: boolean;
+        limit: string;
+        workspace?: string | true;
+      }
     ) => {
       const limit = Number(opts.limit);
       if (!Number.isInteger(limit) || limit < 1) {
@@ -212,6 +236,7 @@ program
         limit,
         ...(opts.path !== undefined ? { paths: opts.path } : {}),
         ...(opts.includeStale === true ? { includeStale: true } : {}),
+        ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
       });
     }
   );

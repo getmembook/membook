@@ -278,6 +278,12 @@ export interface RecallHit {
   /** Null for user-scope memories: no lifecycle exists to report. */
   status: MemoryStatus | null;
   scope: MemoryScope;
+  /**
+   * Workspace member this hit came from; absent for local hits. Provenance
+   * must be visible in the payload — an agent has to be able to tell local
+   * knowledge from a neighbour's testimony.
+   */
+  member?: string;
   confidence: number;
   body: string;
   anchors: RecallAnchor[];
