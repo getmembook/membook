@@ -93,13 +93,23 @@ program
     "-m, --model <name>",
     "model to re-check with; overrides MEMBOOK_MODEL and the provider default"
   )
+  .option(
+    "-w, --workspace [manifest]",
+    "resolve cross-repo anchors via a workspace manifest (default: ~/.membook/workspace.yaml)"
+  )
   .action(
-    async (opts: { dryRun?: boolean; recheck?: boolean; model?: string }) => {
+    async (opts: {
+      dryRun?: boolean;
+      recheck?: boolean;
+      model?: string;
+      workspace?: string | true;
+    }) => {
       await verify({
         root: root(),
         ...(opts.dryRun ? { dryRun: true } : {}),
         ...(opts.recheck ? { recheck: true } : {}),
         ...(opts.model !== undefined ? { model: opts.model } : {}),
+        ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
       });
     }
   );

@@ -52,6 +52,11 @@ export interface VerifyEvent {
   from: MemoryStatus;
   to: MemoryStatus;
   rechecked: boolean;
+  /**
+   * Anchor outcome kinds. Cross-repo outcomes are attributed to their
+   * workspace member as `<kind>@<member>` — e.g. `unresolvable@gateway` —
+   * so per-repository accuracy stays computable from the log.
+   */
   outcomes: string[];
 }
 
@@ -126,6 +131,13 @@ export interface BookEvent {
   carried: number;
   omitted: number;
   excluded: number;
+  /**
+   * Memories excluded because a cross-repo anchor's member repository is not
+   * usable on this machine. Counted apart from `excluded` (drifted) per the
+   * lies-by-aggregation convention: "not trusted" and "not checkable" are
+   * different facts.
+   */
+  excluded_unresolvable: number;
   tokens: number;
 }
 

@@ -211,6 +211,7 @@ describe("INVARIANT: instrumentation cannot break the product", () => {
         carried: 1,
         omitted: 0,
         excluded: 0,
+        excluded_unresolvable: 0,
         tokens: 10,
       })
     ).not.toThrow();

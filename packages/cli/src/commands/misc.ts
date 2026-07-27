@@ -12,12 +12,15 @@ import {
   OpenAiCompatibleProvider,
   SecretScanGuard,
   changesSince,
+  defaultWorkspacePath,
   headSha,
   findMissingAnchorPaths,
   isGitRepository,
+  resolveWorkspaceFile,
   type AnchorRechecker,
   type ModelProvider,
   type Instrumentation,
+  type ResolvedWorkspace,
 } from "@membook/core";
 import {
   bad,
@@ -449,6 +452,11 @@ export interface VerifyOptions extends CommonOptions {
   recheck?: boolean;
   /** Overrides the provider default and `MEMBOOK_MODEL`. */
   model?: string;
+  /**
+   * Manifest path, or `true` for the default `~/.membook/workspace.yaml`.
+   * Without it, cross-repo anchors are honestly unresolvable, not errors.
+   */
+  workspace?: string | true;
 }
 
 export async function verify(options: VerifyOptions): Promise<void> {
@@ -462,6 +470,24 @@ export async function verify(options: VerifyOptions): Promise<void> {
   }
 
   const membook = new Membook(options.root, { instrumentation: true });
+
+  let workspace: ResolvedWorkspace | undefined;
+  if (options.workspace !== undefined) {
+    const manifestPath =
+      typeof options.workspace === "string"
+        ? options.workspace
+        : defaultWorkspacePath();
+    try {
+      workspace = await resolveWorkspaceFile(manifestPath);
+    } catch (error) {
+      // A missing or malformed manifest is a configuration error the user
+      // asked to use — not something to degrade around silently.
+      die(
+        `Could not use the workspace manifest at ${manifestPath}.`,
+        (error as Error).message
+      );
+    }
+  }
 
   let rechecker: AnchorRechecker | null = null;
   if (options.recheck) {
@@ -481,7 +507,15 @@ export async function verify(options: VerifyOptions): Promise<void> {
   const report = await membook.verify({
     ...(options.dryRun ? { dryRun: true } : {}),
     ...(rechecker ? { rechecker } : {}),
+    ...(workspace ? { workspace } : {}),
   });
+
+  // Never folded into "nothing changed": a memory the pass could not reach
+  // is a different fact from one it checked and found sound, and the member
+  // name is the actionable part — it says which checkout this machine lacks.
+  const unreached = [...report.changed, ...report.unchanged].filter((v) =>
+    v.outcomes.some((o) => o.kind === "unresolvable")
+  );
 
   // A memory re-checked and returned `still-stale` did not change status, so
   // it lands in `unchanged`. Reporting that as "nothing changed" would fold
@@ -492,6 +526,40 @@ export async function verify(options: VerifyOptions): Promise<void> {
   );
 
   log("");
+
+  if (unreached.length > 0) {
+    const members = [
+      ...new Set(
+        unreached.flatMap((v) =>
+          v.outcomes
+            .filter((o) => o.kind === "unresolvable")
+            .map((o) => o.member ?? "?")
+        )
+      ),
+    ];
+    log(
+      warn(
+        `${unreached.length} ${plural(
+          unreached.length,
+          "memory reaches",
+          "memories reach"
+        )} into ${plural(
+          members.length,
+          "a repository",
+          "repositories"
+        )} this machine cannot check (${members.join(", ")}).`
+      )
+    );
+    log(
+      dim(
+        options.workspace === undefined
+          ? "  membook verify --workspace   resolve them via ~/.membook/workspace.yaml"
+          : "  Their statuses were left untouched — not confirmed, not doubted."
+      )
+    );
+    log("");
+  }
+
   if (report.changed.length === 0 && rechecked.length === 0) {
     log(
       ok(

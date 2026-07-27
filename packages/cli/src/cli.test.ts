@@ -645,6 +645,92 @@ describe("the real binary", () => {
     expect(stdout).toContain("1 of 1 rewritten");
     expect(await readFile(path, "utf8")).toBe(canonical);
   });
+
+  // §13's own demand: at least one test drives the real binary against a
+  // real multi-repo workspace on disk. This is contract-watch through the
+  // installed entry point, no test seams anywhere.
+  runIf("catches producer drift through a real workspace on disk", async () => {
+    const producerDir = await mkdtemp(join(tmpdir(), "membook-producer-"));
+    await git(producerDir, ["init", "--initial-branch=main"]);
+    await git(producerDir, ["config", "user.name", "Fixture"]);
+    await git(producerDir, ["config", "user.email", "fixture@example.test"]);
+    await git(producerDir, ["config", "commit.gpgsign", "false"]);
+    await mkdir(join(producerDir, "config"), { recursive: true });
+    await writeFile(
+      join(producerDir, "config/limits.yaml"),
+      "requests: 100\n",
+      "utf8"
+    );
+    await git(producerDir, ["add", "-A"]);
+    await git(producerDir, ["commit", "-m", "contract"]);
+    const producerHead = (
+      await execa("git", ["rev-parse", "HEAD"], { cwd: producerDir })
+    ).stdout;
+    const manifest = join(producerDir, "workspace.yaml");
+    await writeFile(
+      manifest,
+      `workspace: bin-test\nmembers:\n  gateway:\n    path: ${producerDir}\n`,
+      "utf8"
+    );
+
+    await init({ root, log });
+    const localHead = (await execa("git", ["rev-parse", "HEAD"], { cwd: root }))
+      .stdout;
+    await new Membook(root).remember(
+      {
+        memfile: 2,
+        id: "m-b1aa",
+        type: "gotcha",
+        status: "verified",
+        scope: "repo",
+        confidence: 0.9,
+        created: "2026-07-25T10:00:00Z",
+        verified: "2026-07-25T10:00:00Z",
+        anchors: [
+          { path: "src/auth.ts", commit: localHead },
+          {
+            kind: "xgit",
+            repo: "gateway",
+            path: "config/limits.yaml",
+            commit: producerHead,
+          },
+        ],
+        provenance: { origin: "authored", author: "human" },
+      },
+      "The gateway allows 100 requests per window."
+    );
+
+    await writeFile(
+      join(producerDir, "config/limits.yaml"),
+      "requests: 50\n",
+      "utf8"
+    );
+    await git(producerDir, ["add", "-A"]);
+    await git(producerDir, ["commit", "-m", "tighten"]);
+
+    const { stdout, exitCode } = await execa("node", [
+      bin,
+      "-C",
+      root,
+      "verify",
+      "--workspace",
+      manifest,
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("m-b1aa");
+    expect(stdout).toContain("stale");
+
+    const { stdout: statusOut } = await execa("node", [
+      bin,
+      "-C",
+      root,
+      "status",
+    ]);
+    expect(statusOut).toContain("1");
+    expect(statusOut).toContain("stale");
+
+    await rm(producerDir, { recursive: true, force: true });
+  });
 });
 
 /**
@@ -1677,5 +1763,94 @@ describe("the binary tells the truth about its version", () => {
     const { version } = JSON.parse(await readFile(pkg, "utf8"));
     const { stdout } = await execa("node", [bin, "--version"]);
     expect(stdout.trim()).toBe(version);
+  });
+});
+
+describe("verify --workspace", () => {
+  async function producerAndMemory(): Promise<{
+    producerDir: string;
+    manifest: string;
+  }> {
+    const producerDir = await mkdtemp(join(tmpdir(), "membook-producer-"));
+    await git(producerDir, ["init", "--initial-branch=main"]);
+    await git(producerDir, ["config", "user.name", "Fixture"]);
+    await git(producerDir, ["config", "user.email", "fixture@example.test"]);
+    await git(producerDir, ["config", "commit.gpgsign", "false"]);
+    await mkdir(join(producerDir, "config"), { recursive: true });
+    await writeFile(
+      join(producerDir, "config/limits.yaml"),
+      "requests: 100\n",
+      "utf8"
+    );
+    await git(producerDir, ["add", "-A"]);
+    await git(producerDir, ["commit", "-m", "contract"]);
+    const producerHead = (
+      await execa("git", ["rev-parse", "HEAD"], { cwd: producerDir })
+    ).stdout;
+
+    const manifest = join(producerDir, "..", `ws-${Date.now()}.yaml`);
+    await writeFile(
+      manifest,
+      `workspace: cli-test\nmembers:\n  gateway:\n    path: ${producerDir}\n`,
+      "utf8"
+    );
+
+    await init({ root, log });
+    const membook = new Membook(root);
+    const body = "The gateway allows 100 requests per window.";
+    const localHead = (await execa("git", ["rev-parse", "HEAD"], { cwd: root }))
+      .stdout;
+    await membook.remember(
+      {
+        memfile: 2,
+        id: "m-c0de",
+        type: "gotcha",
+        status: "verified",
+        scope: "repo",
+        confidence: 0.9,
+        created: "2026-07-25T10:00:00Z",
+        verified: "2026-07-25T10:00:00Z",
+        anchors: [
+          { path: "src/auth.ts", commit: localHead },
+          {
+            kind: "xgit",
+            repo: "gateway",
+            path: "config/limits.yaml",
+            commit: producerHead,
+          },
+        ],
+        provenance: { origin: "authored", author: "human" },
+      },
+      body
+    );
+    return { producerDir, manifest };
+  }
+
+  it("flips the memory stale when the producer moved, through the command", async () => {
+    const { producerDir, manifest } = await producerAndMemory();
+    await writeFile(
+      join(producerDir, "config/limits.yaml"),
+      "requests: 50\n",
+      "utf8"
+    );
+    await git(producerDir, ["add", "-A"]);
+    await git(producerDir, ["commit", "-m", "tighten"]);
+
+    lines = [];
+    await verify({ root, log, workspace: manifest });
+    expect(flat()).toContain("m-c0de");
+    expect(flat()).toContain("stale");
+    await rm(producerDir, { recursive: true, force: true });
+    await rm(manifest, { force: true });
+  });
+
+  it("says which repository it cannot check when run without a workspace", async () => {
+    const { producerDir, manifest } = await producerAndMemory();
+    lines = [];
+    await verify({ root, log });
+    expect(flat()).toContain("this machine cannot check (gateway)");
+    expect(flat()).toContain("membook verify --workspace");
+    await rm(producerDir, { recursive: true, force: true });
+    await rm(manifest, { force: true });
   });
 });
