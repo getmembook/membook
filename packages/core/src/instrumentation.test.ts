@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { computeMemoryId, type MemoryInput } from "@membook/spec";
+import { computeMemoryId, type MemoryInput,
+  type AnchoredMemoryInput,
+} from "@membook/spec";
 import { Membook } from "./membook.js";
 import { FileInstrumentation, NullInstrumentation } from "./instrumentation.js";
 import { SecretScanGuard } from "./secret-scan.js";
@@ -23,7 +25,7 @@ afterEach(async () => {
   await cleanup();
 });
 
-function memoryFor(body: string): MemoryInput {
+function memoryFor(body: string): AnchoredMemoryInput {
   return {
     memfile: 2,
     id: computeMemoryId(body),

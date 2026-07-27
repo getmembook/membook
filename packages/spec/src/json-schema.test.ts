@@ -7,16 +7,28 @@ const SOURCE_HASH =
   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 describe("JSON Schema export", () => {
+  type Branch = {
+    type?: string;
+    required?: string[];
+    properties?: Record<string, Record<string, unknown>>;
+    additionalProperties?: boolean;
+  };
+  const branches = (memoryJsonSchema["oneOf"] ?? []) as Branch[];
+  const anchored = branches.find((b) => b.required?.includes("anchors"));
+  const user = branches.find((b) => !b.required?.includes("anchors"));
+
   // memoryJsonSchema is evaluated at module load: if projection throws, every
   // import of @membook/spec fails. Zod cannot represent z.date(), which is why
   // the projection runs off the wire schema rather than the file schema.
-  it("projects without throwing", () => {
+  it("projects the scope union without throwing", () => {
     expect(typeof memoryJsonSchema).toBe("object");
-    expect(memoryJsonSchema["type"]).toBe("object");
+    expect(branches).toHaveLength(2);
+    expect(anchored).toBeDefined();
+    expect(user).toBeDefined();
   });
 
-  it("describes the required frontmatter fields", () => {
-    expect(memoryJsonSchema["required"]).toEqual(
+  it("describes the required anchored frontmatter fields", () => {
+    expect(anchored!.required).toEqual(
       expect.arrayContaining([
         "memfile",
         "id",
@@ -32,21 +44,28 @@ describe("JSON Schema export", () => {
   });
 
   it("does not require the optional fields", () => {
-    const required = memoryJsonSchema["required"] as string[];
-    expect(required).not.toContain("verified");
-    expect(required).not.toContain("supersedes");
+    expect(anchored!.required).not.toContain("verified");
+    expect(anchored!.required).not.toContain("supersedes");
   });
 
-  it("forbids unknown fields, matching the strict schema", () => {
-    expect(memoryJsonSchema["additionalProperties"]).toBe(false);
+  // The user branch FORBIDS what the anchored branch requires: status and
+  // verified are absent from its properties entirely, and strictness makes
+  // sending them a validation failure rather than fields to ignore.
+  it("gives the user branch no anchors, no status, no verified", () => {
+    const properties = user!.properties ?? {};
+    expect(properties["anchors"]).toBeUndefined();
+    expect(properties["status"]).toBeUndefined();
+    expect(properties["verified"]).toBeUndefined();
+  });
+
+  it("forbids unknown fields in both branches", () => {
+    expect(anchored!.additionalProperties).toBe(false);
+    expect(user!.additionalProperties).toBe(false);
   });
 
   it("types timestamps as strings, not dates", () => {
-    const properties = memoryJsonSchema["properties"] as Record<
-      string,
-      Record<string, unknown>
-    >;
-    expect(properties["created"]?.["type"]).toBe("string");
+    expect(anchored!.properties?.["created"]?.["type"]).toBe("string");
+    expect(user!.properties?.["created"]?.["type"]).toBe("string");
   });
 });
 

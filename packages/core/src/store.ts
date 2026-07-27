@@ -8,20 +8,52 @@ import {
   safeParseMemfile,
   serializeMemfile,
   UnsupportedMemfileVersionError,
+  MemfileValidationError,
+  type AnchoredMemory,
   type Memfile,
   type MemoryInput,
 } from "@membook/spec";
 import type { RepoPaths } from "./paths.js";
-import { MemoryNotFoundError, WriteBlockedError, type QuarantineRecord } from "./errors.js";
+import {
+  MemoryNotFoundError,
+  WriteBlockedError,
+  type QuarantineRecord,
+} from "./errors.js";
 import { NoopWriteGuard, runGuards, type WriteGuard } from "./guard.js";
+
+/**
+ * A Memfile whose frontmatter is the anchored (repo | team) variant — the
+ * only kind a repository store contains. The narrowing is what lets verify,
+ * the book and the index rely on anchors and a status existing, at the type
+ * level, without re-checking at every use site.
+ */
+export interface AnchoredMemfile extends Memfile {
+  frontmatter: AnchoredMemory;
+}
 
 export interface StoredMemory {
   id: string;
   file: string;
   path: string;
-  memfile: Memfile;
+  memfile: AnchoredMemfile;
   /** The exact bytes on disk. */
   text: string;
+}
+
+/**
+ * The scope gate (v0.2 §8): user memories follow the HUMAN, so they live in
+ * `~/.membook/store` — a user-scope file inside a repository store is in the
+ * wrong home, and reporting it as valid would commit personal preferences
+ * into a shared repo. Quarantined with directions, never silently served.
+ */
+const USER_SCOPE_ISSUE =
+  "scope: `user` memories do not belong in a repository store — they live in ~/.membook/store (written with `membook remember --scope user`)";
+
+function anchoredOnly(memfile: Memfile, file: string): AnchoredMemfile {
+  if (memfile.frontmatter.scope === "user") {
+    throw new MemfileValidationError([USER_SCOPE_ISSUE], file);
+  }
+  return memfile as AnchoredMemfile;
 }
 
 export interface ReadAllResult {
@@ -95,7 +127,13 @@ export class MemoryStore {
       }
       throw error;
     }
-    return { id, file, path, text, memfile: parseMemfile(text, file) };
+    return {
+      id,
+      file,
+      path,
+      text,
+      memfile: anchoredOnly(parseMemfile(text, file), file),
+    };
   }
 
   /**
@@ -137,7 +175,21 @@ export class MemoryStore {
         });
         continue;
       }
-      memories.push({ id: idFromFilename(file)!, file, path, text, memfile: parsed.memfile });
+      if (parsed.memfile.frontmatter.scope === "user") {
+        quarantined.push({
+          file,
+          issues: [USER_SCOPE_ISSUE],
+          quarantined_at: `${new Date().toISOString().slice(0, 19)}Z`,
+        });
+        continue;
+      }
+      memories.push({
+        id: idFromFilename(file)!,
+        file,
+        path,
+        text,
+        memfile: parsed.memfile as AnchoredMemfile,
+      });
     }
 
     await this.recordQuarantine(quarantined);
@@ -160,7 +212,7 @@ export class MemoryStore {
       await writeFile(
         join(this.paths.quarantine, `${record.file}.json`),
         `${JSON.stringify(record, null, 2)}\n`,
-        "utf8",
+        "utf8"
       );
     }
   }
@@ -184,7 +236,7 @@ export class MemoryStore {
   async write(frontmatter: MemoryInput, body: string): Promise<StoredMemory> {
     const file = memoryFilename(frontmatter.id);
     const text = serializeMemfile(frontmatter, body, file);
-    const memfile = parseMemfile(text, file);
+    const memfile = anchoredOnly(parseMemfile(text, file), file);
 
     const blocked = await runGuards(this.guards, {
       frontmatter: memfile.frontmatter,

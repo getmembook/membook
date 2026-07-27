@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import type { Memory } from "@membook/spec";
+import type { Memfile, Memory } from "@membook/spec";
 import type { IndexDb } from "./index-db.js";
 import { openIndex } from "./index-db.js";
 import type { MemoryStore, StoredMemory } from "./store.js";
@@ -11,40 +11,61 @@ export interface ReindexResult {
   quarantined: QuarantineRecord[];
 }
 
+/** What indexing needs — both the repo store and the user store have it. */
+export interface IndexableMemory {
+  file: string;
+  memfile: Memfile;
+}
+
 /**
  * Insert one memory into the index. Rowids are assigned from the sorted walk
  * so a rebuild reproduces identical BM25 tie-breaking, not merely an
  * equivalent set of rows.
  */
-export function indexMemory(db: IndexDb, memory: StoredMemory, rowid: number): void {
+export function indexMemory(
+  db: IndexDb,
+  memory: IndexableMemory,
+  rowid: number
+): void {
   const fm: Memory = memory.memfile.frontmatter;
   db.prepare(
     `INSERT INTO memories (id, file, type, status, scope, confidence, created, verified, body, frontmatter)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     fm.id,
     memory.file,
     fm.type,
-    fm.status,
+    // NULL for user scope: the field is absent from the shape, and the
+    // projection must not invent a lifecycle the memory cannot have.
+    fm.scope === "user" ? null : fm.status,
     fm.scope,
     fm.confidence,
     fm.created,
-    fm.verified ?? null,
+    fm.scope === "user" ? null : fm.verified ?? null,
     memory.memfile.body,
-    JSON.stringify(fm),
+    JSON.stringify(fm)
   );
 
   const anchorStmt = db.prepare(
     `INSERT INTO anchors (memory_id, seq, kind, path, symbol, commit_sha)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?)`
   );
-  fm.anchors.forEach((anchor, seq) => {
-    anchorStmt.run(fm.id, seq, anchor.kind, anchor.path, anchor.symbol ?? null, anchor.commit);
-  });
+  if (fm.scope !== "user") {
+    fm.anchors.forEach((anchor, seq) => {
+      anchorStmt.run(
+        fm.id,
+        seq,
+        anchor.kind,
+        anchor.path,
+        anchor.symbol ?? null,
+        anchor.commit
+      );
+    });
+  }
 
   db.prepare("INSERT INTO memories_fts (rowid, body) VALUES (?, ?)").run(
     rowid,
-    memory.memfile.body,
+    memory.memfile.body
   );
   db.prepare("UPDATE memories SET rowid = ? WHERE id = ?").run(rowid, fm.id);
 }
@@ -54,9 +75,15 @@ export function removeFromIndex(db: IndexDb, id: string): void {
     | { rowid: number }
     | undefined;
   if (!row) return;
-  db.prepare("INSERT INTO memories_fts (memories_fts, rowid, body) VALUES ('delete', ?, ?)").run(
+  db.prepare(
+    "INSERT INTO memories_fts (memories_fts, rowid, body) VALUES ('delete', ?, ?)"
+  ).run(
     row.rowid,
-    (db.prepare("SELECT body FROM memories WHERE id = ?").get(id) as { body: string }).body,
+    (
+      db.prepare("SELECT body FROM memories WHERE id = ?").get(id) as {
+        body: string;
+      }
+    ).body
   );
   db.prepare("DELETE FROM anchors WHERE memory_id = ?").run(id);
   db.prepare("DELETE FROM memories WHERE id = ?").run(id);
@@ -71,7 +98,7 @@ export function removeFromIndex(db: IndexDb, id: string): void {
  */
 export async function reindex(
   paths: RepoPaths,
-  store: MemoryStore,
+  store: MemoryStore
 ): Promise<ReindexResult> {
   await rm(paths.indexFile, { force: true });
   await rm(`${paths.indexFile}-wal`, { force: true });

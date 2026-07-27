@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
-import { computeMemoryId, type MemoryInput } from "@membook/spec";
+import { computeMemoryId, type MemoryInput,
+  type AnchoredMemoryInput,
+} from "@membook/spec";
 import { Membook } from "./membook.js";
 import { BOOK, estimateTokens } from "./book.js";
 import { tempRepo } from "./test-helpers.js";
@@ -23,8 +25,8 @@ afterEach(async () => {
 
 interface SeedSpec {
   body: string;
-  type?: MemoryInput["type"];
-  status?: MemoryInput["status"];
+  type?: AnchoredMemoryInput["type"];
+  status?: AnchoredMemoryInput["status"];
   confidence?: number;
   paths?: string[];
 }

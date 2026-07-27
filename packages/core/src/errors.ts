@@ -22,7 +22,7 @@ export class IndexMetadataMismatchError extends Error {
           (m) => `  - ${m.key}: index has ${m.found}, code expects ${m.expected}`,
         ),
         "",
-        "The index is a disposable cache. Rebuild it: membook reindex --force",
+        "The index is a disposable cache. Rebuild it: membook reindex",
       ].join("\n"),
     );
     this.name = "IndexMetadataMismatchError";

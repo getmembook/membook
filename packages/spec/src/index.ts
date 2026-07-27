@@ -33,8 +33,12 @@ export {
   type AgentAuthoredProvenance,
   type HumanAuthoredProvenance,
   type Memory,
+  type AnchoredMemory,
+  type UserMemory,
   type MemoryInput,
   type MemoryFileInput,
+  type AnchoredMemoryInput,
+  type UserMemoryInput,
 } from "./schema.js";
 
 export { MemfileValidationError } from "./errors.js";

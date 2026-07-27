@@ -1,10 +1,21 @@
 export { Membook, type MembookOptions, type StatusReport } from "./membook.js";
 export {
   MemoryStore,
+  type AnchoredMemfile,
   type StoredMemory,
   type ReadAllResult,
   type MemoryStoreOptions,
 } from "./store.js";
+export {
+  UserStore,
+  userPaths,
+  type UserPaths,
+  type UserMemfile,
+  type StoredUserMemory,
+  type UserReadResult,
+  type UserRememberInput,
+  type UserStoreOptions,
+} from "./user-store.js";
 export { repoPaths, type RepoPaths } from "./paths.js";
 export {
   NoopWriteGuard,

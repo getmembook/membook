@@ -14,8 +14,12 @@ import { IndexMetadataMismatchError } from "./errors.js";
  * loudly and demands a rebuild, which is cheap: the index is a cache.
  */
 export const INDEX_METADATA = {
-  /** Bumped when the table layout below changes. */
-  schema_version: "1",
+  /**
+   * Bumped when the table layout below changes.
+   * 2 — `status` became nullable: user-scope memories have no verification
+   * lifecycle, and NULL is the honest projection of an absent field.
+   */
+  schema_version: "2",
 
   /** Memfile spec version whose fields are projected into columns. */
   spec_version: String(MEMFILE_SPEC_VERSION),
@@ -55,7 +59,8 @@ CREATE TABLE IF NOT EXISTS memories (
   id          TEXT PRIMARY KEY,
   file        TEXT NOT NULL,
   type        TEXT NOT NULL,
-  status      TEXT NOT NULL,
+  -- NULL for user-scope memories: absent from the shape, not unverified.
+  status      TEXT,
   scope       TEXT NOT NULL,
   confidence  REAL NOT NULL,
   created     TEXT NOT NULL,

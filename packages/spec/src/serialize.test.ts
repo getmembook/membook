@@ -21,7 +21,9 @@ const COMMIT = "9f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d";
 const SOURCE_HASH =
   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-function validMemory(overrides: Partial<MemoryInput> = {}): MemoryInput {
+type AnchoredInput = Extract<MemoryInput, { anchors: unknown }>;
+
+function validMemory(overrides: Partial<AnchoredInput> = {}): AnchoredInput {
   return {
     memfile: 2,
     id: "m-4f2a",
@@ -64,7 +66,9 @@ describe("golden examples", () => {
         f
       );
       return (
-        frontmatter.status !== "verified" && frontmatter.verified === undefined
+        frontmatter.scope !== "user" &&
+        frontmatter.status !== "verified" &&
+        frontmatter.verified === undefined
       );
     });
     expect(found).toBe(true);
@@ -422,7 +426,10 @@ describe("loud failure", () => {
   });
 
   it("rejects unknown frontmatter fields", () => {
-    const memory = { ...validMemory(), rogue: "field" } as MemoryInput;
+    const memory = {
+      ...validMemory(),
+      rogue: "field",
+    } as unknown as MemoryInput;
     expect(() => serializeMemfile(memory, "A statement.")).toThrow(
       MemfileValidationError
     );
@@ -560,5 +567,51 @@ describe("parsing", () => {
     const text = serializeMemfile(validMemory(), "A statement.");
     const result = safeParseMemfile(text, "x.mem.md");
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("the scope discrimination", () => {
+  const userMemory = (): MemoryInput => ({
+    memfile: 2,
+    id: "m-1111",
+    type: "convention",
+    scope: "user",
+    confidence: 0.9,
+    created: "2026-07-26T09:00:00Z",
+    provenance: { origin: "authored", author: "human" },
+  });
+
+  it("serializes a user memory with no status, verified or anchors keys", () => {
+    const text = serializeMemfile(userMemory(), "Prefer explicit return types.");
+    expect(text).toContain("scope: user");
+    expect(text).not.toContain("status:");
+    expect(text).not.toContain("verified:");
+    expect(text).not.toContain("anchors:");
+    const { frontmatter } = parseMemfile(text);
+    expect(frontmatter.scope).toBe("user");
+  });
+
+  // Forbidden, not optional: if you have a file to point at, it is not a
+  // preference — it is repo knowledge wearing the wrong scope.
+  it("rejects a user memory carrying an anchor", () => {
+    const withAnchor = {
+      ...userMemory(),
+      anchors: [{ path: "src/auth.ts", commit: COMMIT }],
+    } as unknown as MemoryInput;
+    expect(() => serializeMemfile(withAnchor, "A preference.")).toThrow(
+      /anchors/
+    );
+  });
+
+  // Absent from the shape, not perpetually unverified: a field implying a
+  // pending check must not exist on a memory that can never be checked.
+  it("rejects a user memory carrying a status", () => {
+    const withStatus = {
+      ...userMemory(),
+      status: "unverified",
+    } as unknown as MemoryInput;
+    expect(() => serializeMemfile(withStatus, "A preference.")).toThrow(
+      /status/
+    );
   });
 });

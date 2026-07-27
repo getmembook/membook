@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { computeMemoryId, type MemoryInput } from "@membook/spec";
+import { computeMemoryId, type MemoryInput,
+  type AnchoredMemoryInput,
+} from "@membook/spec";
 import { Membook } from "./membook.js";
 import {
   pathAffinity,
@@ -28,7 +30,7 @@ afterEach(async () => {
 async function seed(spec: {
   body: string;
   paths: string[];
-  status?: MemoryInput["status"];
+  status?: AnchoredMemoryInput["status"];
   created?: string;
   verified?: string;
 }): Promise<string> {

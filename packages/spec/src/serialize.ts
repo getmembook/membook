@@ -92,9 +92,12 @@ function orderKeys<T extends Record<string, unknown>>(
 
 function orderFrontmatter(memory: Memory): Record<string, unknown> {
   const ordered = orderKeys(memory, KEY_ORDER);
-  ordered["anchors"] = memory.anchors.map((anchor) =>
-    orderKeys(anchor, ANCHOR_KEY_ORDER)
-  );
+  // A user memory has no anchors — absent from the shape, not empty.
+  if ("anchors" in memory) {
+    ordered["anchors"] = memory.anchors.map((anchor) =>
+      orderKeys(anchor, ANCHOR_KEY_ORDER)
+    );
+  }
   ordered["provenance"] = orderKeys(memory.provenance, PROVENANCE_KEY_ORDER);
   return ordered;
 }

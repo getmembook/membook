@@ -220,9 +220,14 @@ program
   .command("remember")
   .description("record a memory yourself")
   .argument("<statement>", "the memory: terse, self-contained, claim first")
-  .requiredOption(
+  .option(
     "-p, --path <path...>",
-    "repo-relative file this is about (repeatable)"
+    "repo-relative file this is about (repeatable; required unless --scope user)"
+  )
+  .option(
+    "--scope <scope>",
+    "repo (anchored to this repository) or user (follows you, never committed)",
+    "repo"
   )
   .option("-t, --type <type>", `one of: ${MEMORY_TYPES.join(", ")}`, "gotcha")
   .option("-s, --symbol <symbol>", "specific function or class, if any")
@@ -231,7 +236,8 @@ program
     async (
       statement: string,
       opts: {
-        path: string[];
+        path?: string[];
+        scope: string;
         type: string;
         symbol?: string;
         confidence: string;
@@ -243,15 +249,25 @@ program
           `Use one of: ${MEMORY_TYPES.join(", ")}`
         );
       }
+      if (opts.scope !== "repo" && opts.scope !== "user") {
+        die(`Unknown scope "${opts.scope}".`, "Use repo or user.");
+      }
       const confidence = Number(opts.confidence);
       if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
         die(`Confidence must be a number between 0 and 1.`);
+      }
+      if (opts.scope === "repo" && !opts.path?.length) {
+        die(
+          "A repo memory needs at least one --path to anchor to.",
+          "A preference with no file to point at is user scope: --scope user."
+        );
       }
       await remember({
         root: root(),
         statement,
         type: opts.type as MemoryType,
-        paths: opts.path,
+        paths: opts.path ?? [],
+        scope: opts.scope,
         ...(opts.symbol !== undefined ? { symbol: opts.symbol } : {}),
         confidence,
       });

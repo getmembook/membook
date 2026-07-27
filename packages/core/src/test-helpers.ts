@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   MEMFILE_SPEC_VERSION,
   computeMemoryId,
+  type AnchoredMemoryInput,
   type MemoryInput,
 } from "@membook/spec";
 import { Membook } from "./membook.js";
@@ -20,13 +21,13 @@ export async function tempRepo(): Promise<{
 
 export interface SeedSpec {
   body: string;
-  type?: MemoryInput["type"];
-  status?: MemoryInput["status"];
+  type?: AnchoredMemoryInput["type"];
+  status?: AnchoredMemoryInput["status"];
   paths?: string[];
 }
 
 export function memoryFor(spec: SeedSpec): {
-  frontmatter: MemoryInput;
+  frontmatter: AnchoredMemoryInput;
   body: string;
 } {
   return {
