@@ -172,6 +172,7 @@ export {
 export {
   isGitRepository,
   headSha,
+  behindUpstream,
   commitExists,
   originUrl,
   changesSince,

@@ -77,8 +77,16 @@ program
   .command("status")
   .description("what is known, and how far to trust it")
   .option("--check", "also diff anchors against HEAD, without writing")
-  .action(async (opts: { check?: boolean }) => {
-    await status({ root: root(), ...(opts.check ? { check: true } : {}) });
+  .option(
+    "-w, --workspace [manifest]",
+    "report workspace members and resolve cross-repo anchors (default: ~/.membook/workspace.yaml)"
+  )
+  .action(async (opts: { check?: boolean; workspace?: string | true }) => {
+    await status({
+      root: root(),
+      ...(opts.check ? { check: true } : {}),
+      ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
+    });
   });
 
 program
@@ -142,8 +150,15 @@ program
 program
   .command("book")
   .description("regenerate MEMBOOK.md")
-  .action(async () => {
-    await book({ root: root() });
+  .option(
+    "-w, --workspace [manifest]",
+    "resolve cross-repo anchors via a workspace manifest (default: ~/.membook/workspace.yaml)"
+  )
+  .action(async (opts: { workspace?: string | true }) => {
+    await book({
+      root: root(),
+      ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
+    });
   });
 
 program

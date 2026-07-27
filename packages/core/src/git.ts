@@ -73,6 +73,24 @@ export async function originUrl(cwd: string): Promise<string | null> {
   }
 }
 
+/**
+ * How many commits the checkout's upstream has that HEAD does not, or null
+ * when there is no upstream to compare against. No fetch — this reads what
+ * the last pull already knows, because a verify pass must never touch the
+ * network. The number is information, not alarm: a behind checkout verifies
+ * against yesterday's reality, which is consistent with the tool's claim
+ * ("last proven against <commit>") and worth saying out loud.
+ */
+export async function behindUpstream(cwd: string): Promise<number | null> {
+  try {
+    const count = await git(cwd, ["rev-list", "--count", "HEAD..@{upstream}"]);
+    const n = Number(count);
+    return Number.isInteger(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function commitExists(cwd: string, sha: string): Promise<boolean> {
   try {
     const type = await git(cwd, ["cat-file", "-t", sha]);

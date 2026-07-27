@@ -7,7 +7,9 @@ import {
   headSha,
   findMissingAnchorPaths,
   isGitRepository,
+  resolveWorkspaceFile,
   type RecallHit,
+  type ResolvedWorkspace,
   SecretScanGuard,
   type WriteGuard,
   type Instrumentation,
@@ -45,6 +47,14 @@ export interface CreateServerOptions {
   guards?: readonly WriteGuard[];
   /** Local event log. Defaults to on; never leaves the machine. */
   instrumentation?: Instrumentation | boolean;
+  /**
+   * Workspace manifest path, for cross-repo anchors (set via
+   * MEMBOOK_WORKSPACE when spawned by a harness). Resolved lazily per call:
+   * checkouts appear and disappear between tool calls, and a manifest that
+   * cannot be used degrades to unresolvable anchors with the reason named,
+   * never to a dead server.
+   */
+  workspaceManifest?: string;
   /** Injected for deterministic tests. */
   now?: () => Date;
 }
@@ -94,6 +104,15 @@ export function createServer(options: CreateServerOptions): McpServer {
     // store is a no-op, so this costs nothing until preferences exist.
     userStore: new UserStore(),
   });
+
+  const workspace = async (): Promise<ResolvedWorkspace | undefined> => {
+    if (!options.workspaceManifest) return undefined;
+    try {
+      return await resolveWorkspaceFile(options.workspaceManifest);
+    } catch {
+      return undefined;
+    }
+  };
 
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
@@ -386,7 +405,11 @@ export function createServer(options: CreateServerOptions): McpServer {
       }
 
       if (verify === true && (await isGitRepository(root))) {
-        const report = await membook.verify({ dryRun: true });
+        const ws = await workspace();
+        const report = await membook.verify({
+          dryRun: true,
+          ...(ws ? { workspace: ws } : {}),
+        });
         const wouldChange = report.changed.length;
         lines.push(
           wouldChange === 0

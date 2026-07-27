@@ -1923,3 +1923,131 @@ describe("remember --scope user", () => {
     expect(result.stderr).toMatch(/repo knowledge/);
   });
 });
+
+describe("status --workspace and book --workspace", () => {
+  async function producerRepo(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), "membook-prod-"));
+    await git(dir, ["init", "--initial-branch=main"]);
+    await git(dir, ["config", "user.name", "Fixture"]);
+    await git(dir, ["config", "user.email", "fixture@example.test"]);
+    await git(dir, ["config", "commit.gpgsign", "false"]);
+    await mkdir(join(dir, "config"), { recursive: true });
+    await writeFile(join(dir, "config/limits.yaml"), "requests: 100\n", "utf8");
+    await git(dir, ["add", "-A"]);
+    await git(dir, ["commit", "-m", "contract"]);
+    return dir;
+  }
+
+  async function xgitMemory(producerDir: string): Promise<void> {
+    await init({ root, log });
+    const producerHead = (
+      await execa("git", ["rev-parse", "HEAD"], { cwd: producerDir })
+    ).stdout;
+    const localHead = (
+      await execa("git", ["rev-parse", "HEAD"], { cwd: root })
+    ).stdout;
+    await new Membook(root).remember(
+      {
+        memfile: 2,
+        id: "m-feed",
+        type: "gotcha",
+        status: "verified",
+        scope: "repo",
+        confidence: 0.9,
+        created: "2026-07-25T10:00:00Z",
+        verified: "2026-07-25T10:00:00Z",
+        anchors: [
+          { path: "src/auth.ts", commit: localHead },
+          { kind: "xgit", repo: "gateway", path: "config/limits.yaml", commit: producerHead },
+        ],
+        provenance: { origin: "authored", author: "human" },
+      },
+      "The gateway allows 100 requests per window."
+    );
+  }
+
+  it("reports members, reach, and unresolvable honestly", async () => {
+    const producerDir = await producerRepo();
+    const manifest = join(producerDir, "..", `st-${Date.now()}.yaml`);
+    await writeFile(
+      manifest,
+      `workspace: stag\nmembers:\n  gateway:\n    path: ${producerDir}\n  ghost:\n    path: ${join(
+        producerDir,
+        "nowhere"
+      )}\n`,
+      "utf8"
+    );
+    await xgitMemory(producerDir);
+
+    lines = [];
+    await status({ root, workspace: manifest, log });
+    expect(flat()).toContain("Workspace stag — 1 of 2 members usable");
+    expect(flat()).toContain("identity undeclared");
+    expect(flat()).toContain("1 memory here reaches into it");
+    expect(flat()).toContain("unresolvable: nothing at");
+
+    await rm(producerDir, { recursive: true, force: true });
+    await rm(manifest, { force: true });
+  });
+
+  it("says when a member is behind its upstream, as information", async () => {
+    const upstream = await producerRepo();
+    const clone = join(upstream, "..", `clone-${Date.now()}`);
+    await execa("git", ["clone", "-q", upstream, clone]);
+    await git(clone, ["config", "commit.gpgsign", "false"]);
+    // Upstream moves; the clone fetches but does not merge.
+    await writeFile(join(upstream, "config/limits.yaml"), "requests: 50\n", "utf8");
+    await git(upstream, ["add", "-A"]);
+    await git(upstream, ["commit", "-m", "tighten"]);
+    await git(clone, ["fetch", "-q"]);
+
+    const manifest = join(upstream, "..", `bh-${Date.now()}.yaml`);
+    await writeFile(
+      manifest,
+      `workspace: stag\nmembers:\n  gateway:\n    path: ${clone}\n`,
+      "utf8"
+    );
+    await init({ root, log });
+    await remember({
+      root,
+      statement: "Local knowledge so status has a store.",
+      type: "gotcha",
+      paths: ["src/auth.ts"],
+      log,
+    });
+
+    lines = [];
+    await status({ root, workspace: manifest, log });
+    expect(flat()).toContain("1 commit behind its upstream");
+    expect(flat()).toContain("what was last pulled");
+
+    await rm(upstream, { recursive: true, force: true });
+    await rm(clone, { recursive: true, force: true });
+    await rm(manifest, { force: true });
+  });
+
+  it("book withholds cross-repo memories without a workspace, carries them with one", async () => {
+    const producerDir = await producerRepo();
+    const manifest = join(producerDir, "..", `bk-${Date.now()}.yaml`);
+    await writeFile(
+      manifest,
+      `workspace: stag\nmembers:\n  gateway:\n    path: ${producerDir}\n`,
+      "utf8"
+    );
+    await xgitMemory(producerDir);
+
+    lines = [];
+    await book({ root, log });
+    expect(flat()).toContain("not present on this machine");
+
+    lines = [];
+    await book({ root, workspace: manifest, log });
+    expect(flat()).not.toContain("not present on this machine");
+    expect(await readFile(join(root, "MEMBOOK.md"), "utf8")).toContain(
+      "gateway allows 100 requests"
+    );
+
+    await rm(producerDir, { recursive: true, force: true });
+    await rm(manifest, { force: true });
+  });
+});

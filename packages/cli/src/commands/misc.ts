@@ -79,6 +79,26 @@ export async function reindex(options: CommonOptions): Promise<void> {
   log("");
 }
 
+/**
+ * Resolve a `--workspace [manifest]` flag: a bare flag means the default
+ * `~/.membook/workspace.yaml`, and a manifest the user asked for but cannot
+ * be used is a configuration error to die on, never to degrade around.
+ */
+export async function resolveWorkspaceFlag(
+  flag: string | true | undefined
+): Promise<ResolvedWorkspace | undefined> {
+  if (flag === undefined) return undefined;
+  const manifestPath = typeof flag === "string" ? flag : defaultWorkspacePath();
+  try {
+    return await resolveWorkspaceFile(manifestPath);
+  } catch (error) {
+    die(
+      `Could not use the workspace manifest at ${manifestPath}.`,
+      (error as Error).message
+    );
+  }
+}
+
 export interface MigrateCliOptions extends CommonOptions {
   dryRun?: boolean;
 }
@@ -350,13 +370,21 @@ export async function recall(options: RecallOptions): Promise<void> {
   }
 }
 
-export async function book(options: CommonOptions): Promise<void> {
+export interface BookCliOptions extends CommonOptions {
+  /** Resolve cross-repo anchors via a workspace manifest. */
+  workspace?: string | true;
+}
+
+export async function book(options: BookCliOptions): Promise<void> {
   const log = out(options);
+  const workspace = await resolveWorkspaceFlag(options.workspace);
   // Instrumented, because how much the book carried and how much it withheld
   // are the numbers the honesty claim rests on. Found by dogfooding: the book
   // event existed and was recorded into a null log on every human run.
   const membook = new Membook(options.root, { instrumentation: true });
-  const report = await membook.writeBook();
+  const report = await membook.writeBook({
+    ...(workspace ? { workspace } : {}),
+  });
 
   log("");
   log(
@@ -380,6 +408,17 @@ export async function book(options: CommonOptions): Promise<void> {
           "it was",
           "they were"
         )} last checked.`
+      )
+    );
+  }
+  if (report.excludedUnresolvable > 0) {
+    log(
+      dim(
+        `  ${report.excludedUnresolvable} withheld: the ${plural(
+          report.excludedUnresolvable,
+          "repository it describes is",
+          "repositories they describe are"
+        )} not present on this machine.`
       )
     );
   }
@@ -484,23 +523,7 @@ export async function verify(options: VerifyOptions): Promise<void> {
 
   const membook = new Membook(options.root, { instrumentation: true });
 
-  let workspace: ResolvedWorkspace | undefined;
-  if (options.workspace !== undefined) {
-    const manifestPath =
-      typeof options.workspace === "string"
-        ? options.workspace
-        : defaultWorkspacePath();
-    try {
-      workspace = await resolveWorkspaceFile(manifestPath);
-    } catch (error) {
-      // A missing or malformed manifest is a configuration error the user
-      // asked to use — not something to degrade around silently.
-      die(
-        `Could not use the workspace manifest at ${manifestPath}.`,
-        (error as Error).message
-      );
-    }
-  }
+  const workspace = await resolveWorkspaceFlag(options.workspace);
 
   let rechecker: AnchorRechecker | null = null;
   if (options.recheck) {

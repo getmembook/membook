@@ -23,6 +23,9 @@ async function main(): Promise<void> {
     ...(process.env["MEMBOOK_SESSION"]
       ? { session: process.env["MEMBOOK_SESSION"] }
       : {}),
+    ...(process.env["MEMBOOK_WORKSPACE"]
+      ? { workspaceManifest: process.env["MEMBOOK_WORKSPACE"] }
+      : {}),
   });
 
   await server.connect(new StdioServerTransport());
