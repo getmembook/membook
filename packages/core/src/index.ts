@@ -161,6 +161,13 @@ export {
   type TouchedAnchor,
 } from "./recheck.js";
 export {
+  federatedRecall,
+  workspaceCacheDir,
+  CROSS_REPO_WEIGHT,
+  type FederatedRecallResult,
+  type FederatedMemberResult,
+} from "./federated-recall.js";
+export {
   canonicalRemote,
   defaultWorkspacePath,
   resolveWorkspace,

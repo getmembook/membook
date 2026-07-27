@@ -212,10 +212,19 @@ program
   )
   .option("--include-stale", "also show memories whose code has drifted")
   .option("-n, --limit <n>", "maximum memories to show", "8")
+  .option(
+    "-w, --workspace [manifest]",
+    "also search workspace members' memories (default: ~/.membook/workspace.yaml)"
+  )
   .action(
     async (
       query: string,
-      opts: { path?: string[]; includeStale?: boolean; limit: string }
+      opts: {
+        path?: string[];
+        includeStale?: boolean;
+        limit: string;
+        workspace?: string | true;
+      }
     ) => {
       const limit = Number(opts.limit);
       if (!Number.isInteger(limit) || limit < 1) {
@@ -227,6 +236,7 @@ program
         limit,
         ...(opts.path !== undefined ? { paths: opts.path } : {}),
         ...(opts.includeStale === true ? { includeStale: true } : {}),
+        ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
       });
     }
   );

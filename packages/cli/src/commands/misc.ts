@@ -218,6 +218,8 @@ export interface RecallOptions extends CommonOptions {
   paths?: string[];
   includeStale?: boolean;
   limit?: number;
+  /** Fan out across workspace members' stores (v0.2 §7). */
+  workspace?: string | true;
 }
 
 /**
@@ -235,6 +237,7 @@ export interface RecallOptions extends CommonOptions {
  */
 export async function recall(options: RecallOptions): Promise<void> {
   const log = out(options);
+  const workspace = await resolveWorkspaceFlag(options.workspace);
   const membook = new Membook(options.root, {
     instrumentation: true,
     // The human's own store joins every recall (v0.2 §8).
@@ -251,6 +254,7 @@ export async function recall(options: RecallOptions): Promise<void> {
     statuses,
     ...(options.limit !== undefined ? { limit: options.limit } : {}),
     ...(options.paths?.length ? { contextPaths: options.paths } : {}),
+    ...(workspace ? { workspace } : {}),
   });
 
   log("");
@@ -338,7 +342,9 @@ export async function recall(options: RecallOptions): Promise<void> {
     log(
       `${hit.status === null ? dim("user") : statusLabel(hit.status)}  ${
         hit.id
-      }  ${dim(hit.type)}`
+      }  ${dim(hit.type)}${
+        hit.member !== undefined ? `  ${dim(`from ${hit.member}`)}` : ""
+      }`
     );
     log(wrap(hit.body, 76, "  "));
     if (hit.anchors.length > 0) {

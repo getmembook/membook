@@ -66,6 +66,8 @@ function renderHit(hit: RecallHit): string {
   if (hit.scope === "user") {
     return [`[${hit.type} · user preference] ${hit.id}`, hit.body].join("\n");
   }
+  // A neighbour's testimony wears its origin: `[gotcha · from gateway]`.
+  const origin = hit.member !== undefined ? ` · from ${hit.member}` : "";
   const anchors = hit.anchors
     .map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path))
     .join(", ");
@@ -79,7 +81,7 @@ function renderHit(hit: RecallHit): string {
       ? " (unverified)"
       : "";
   return [
-    `[${hit.type}${flag}] ${hit.id}`,
+    `[${hit.type}${flag}${origin}] ${hit.id}`,
     hit.body,
     `anchors: ${anchors}`,
   ].join("\n");
@@ -159,10 +161,12 @@ export function createServer(options: CreateServerOptions): McpServer {
       if (include_unverified !== false) statuses.push("unverified");
       if (include_stale === true) statuses.push("stale");
 
+      const ws = await workspace();
       const { hits, withheld } = await membook.recall(query, {
         statuses,
         limit: Math.min(limit ?? MAX_RECALL_HITS, MAX_RECALL_HITS),
         ...(paths?.length ? { contextPaths: paths } : {}),
+        ...(ws ? { workspace: ws } : {}),
         now: now(),
       });
 

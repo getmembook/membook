@@ -35,6 +35,8 @@ export interface RecallEvent {
   served: number;
   /** How many served hits came from the human's own store. */
   served_user: number;
+  /** How many served hits came from workspace members' stores. */
+  served_remote: number;
   withheld_below_floor: number;
   withheld_by_status: Record<string, number>;
   top_score: number | null;
