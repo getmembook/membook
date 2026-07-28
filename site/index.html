@@ -468,8 +468,11 @@
             <span class="badge"
               ><span>CI</span><span class="ok">passing</span></span
             >
-            <span class="badge"
-              ><span>npm</span><span class="plain">v0.1.0</span></span
+            <a
+              class="badge"
+              href="https://www.npmjs.com/package/membook"
+              style="text-decoration: none"
+              ><span>npm</span><span class="plain">membook</span></a
             >
             <span class="badge"
               ><span>license</span><span class="plain">MIT</span></span
@@ -505,7 +508,8 @@
           <pre><span class="k">type:</span> gotcha
 <span class="k">status:</span> <span class="s">verified</span>
 <span class="k">anchors:</span>
-  - <span class="k">path:</span> src/auth.ts
+  - <span class="k">kind:</span> git
+    <span class="k">path:</span> src/auth.ts
     <span class="k">commit:</span> 8c14b02
 ---
 Auth tokens refresh on the request
@@ -554,7 +558,45 @@ drifts and expires sessions mid-flight.</pre>
       </section>
 
       <div class="sec">
-        <span class="n">02</span><b>Install</b
+        <span class="n">02</span><b>Contract-watch</b
+        ><span>the verification loop, across repositories</span>
+      </div>
+      <section class="loop">
+        <div>
+          <span class="n">01</span><b>Declare</b>
+          <p>
+            A workspace manifest maps member names to the checkouts your
+            machine already has. No server — <code>git pull</code> is the
+            propagation medium.
+          </p>
+        </div>
+        <div>
+          <span class="n">02</span><b>Anchor across</b>
+          <p>
+            A memory in your repo pins into a neighbour:
+            <code>kind: xgit, repo: gateway, path: config/limits.yaml</code>.
+          </p>
+        </div>
+        <div>
+          <span class="n">03</span><b>Catch drift</b>
+          <p>
+            The producer merges a contract change; you pull;
+            <code>verify --workspace</code> flips your memory stale —
+            <em>before</em> an agent writes code against the old shape.
+          </p>
+        </div>
+        <div>
+          <span class="n">04</span><b>Stay honest</b>
+          <p>
+            A member this machine cannot see is
+            <code>unresolvable</code> — not stale, not verified, never folded
+            into either.
+          </p>
+        </div>
+      </section>
+
+      <div class="sec">
+        <span class="n">03</span><b>Install</b
         ><span>one command, no daemon, no account</span>
       </div>
       <section class="install">
@@ -569,7 +611,7 @@ drifts and expires sessions mid-flight.</pre>
       </section>
 
       <div class="sec">
-        <span class="n">03</span><b>Commitments</b
+        <span class="n">04</span><b>Commitments</b
         ><span>each one checkable, none aspirational</span>
       </div>
       <section class="commit-list">
