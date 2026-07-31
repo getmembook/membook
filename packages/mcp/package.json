@@ -50,7 +50,7 @@
   "dependencies": {
     "@membook/core": "workspace:*",
     "@membook/spec": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.0.5"
   },
   "devDependencies": {
