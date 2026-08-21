@@ -40,8 +40,8 @@
     "@types/node": "^20.19.0",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
-    "vitest": "^4.1.10",
-    "tsx": "^4.20.3"
+    "vitest": "^4.1.11",
+    "tsx": "^4.23.12"
   },
   "publishConfig": {
     "access": "public"
