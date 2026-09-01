@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
       # No `registry-url` here, deliberately. It writes an .npmrc whose auth
       # line references ${NODE_AUTH_TOKEN}; with no token in this repo, npm
@@ -49,7 +49,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+      - uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
         with:
           # `version` updates package versions and changelogs from the pending
           # changesets; `publish` builds and then publishes whatever is newly
